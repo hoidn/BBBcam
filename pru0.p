@@ -1,0 +1,263 @@
+// *
+// * PRU_memAcc_DDR_sharedRAM.p
+// *
+// * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
+// *
+// *
+// *  Redistribution and use in source and binary forms, with or without
+// *  modification, are permitted provided that the following conditions
+// *  are met:
+// *
+// *    Redistributions of source code must retain the above copyright
+// *    notice, this list of conditions and the following disclaimer.
+// *
+// *    Redistributions in binary form must reproduce the above copyright
+// *    notice, this list of conditions and the following disclaimer in the
+// *    documentation and/or other materials provided with the
+// *    distribution.
+// *
+// *    Neither the name of Texas Instruments Incorporated nor the names of
+// *    its contributors may be used to endorse or promote products derived
+// *    from this software without specific prior written permission.
+// *
+// *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+// *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+// *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+// *  A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+// *  OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// *  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+// *  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+// *  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+// *  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// *  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// *  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// *
+// *
+
+// *
+// * ============================================================================
+// * Copyright (c) Texas Instruments Inc 2010-12
+// *
+// * Use of this software is controlled by the terms and conditions found in the
+// * license agreement under which this software has been supplied or provided.
+// * ============================================================================
+// *
+
+
+// *****************************************************************************/
+// file:   PRU_memAcc_DDR_sharedRAM.p
+//
+// brief:  PRU Example to access DDR and PRU shared Memory.
+//
+//
+//  (C) Copyright 2012, Texas Instruments, Inc
+//
+//  author     M. Watkins
+//
+//  version    0.1     Created
+// *****************************************************************************/
+
+
+.origin 0
+.entrypoint MEMACCESS_DDR_PRUSHAREDRAM
+
+#include "PRU_memAcc_DDR_sharedRAM.hp"
+
+// Address for the Constant table Block Index Register (CTBIR) for PRU0
+#define CTBIR_0          0x22020
+
+// Address for the Constant table Programmable Pointer Register 0(CTPPR_0) for PRU0
+#define CTPPR_0_0         0x22028
+
+// Address for the Constant table Programmable Pointer Register 1(CTPPR_1) for PRU0
+#define CTPPR_1_0         0x2202C
+
+//macros
+
+
+MEMACCESS_DDR_PRUSHAREDRAM:
+
+    // Enable OCP master port
+    LBCO      r0, CONST_PRUCFG, 4, 4
+    CLR     r0, r0, 4         // Clear SYSCFG[STANDBY_INIT] to enable OCP master port
+    SBCO      r0, CONST_PRUCFG, 4, 4
+
+    // Configure the programmable pointer register for PRU0 by setting c28_pointer[15:0]
+    // field to 0x0120.  This will make C28 point to 0x00012000 (PRU shared RAM).
+    MOV     r0, 0x00000100
+    MOV       r1, CTPPR_0_0
+    ST32      r0, r1
+
+    // Configure the programmable pointer register for PRU0 by setting c31_pointer[15:0]
+    // field to 0x0010.  This will make C31 point to 0x80001000 (DDR memory).
+    MOV     r0, 0x00100000
+    MOV       r1, CTPPR_1_0
+    ST32      r0, r1
+
+
+
+INIT:
+        MOV     r0, 0
+        MOV     transfer_ready, 0
+        MOV number_frames, NUMFRAMES + 1
+        MOV frame_counter, 0
+
+        // TODO: what does this do? (configure interrupts?)
+        LBCO r0, CONST_PRUCFG, 0x34, 4                    
+        SET r0, 1
+        SBCO r0, CONST_PRUCFG, 0x34, 4
+
+        // set ACK field in PRU mem to 1 to get the ball rolling
+        LDI     pr0ack, 1
+        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+
+        // Load DDR addr from arm host into a ddr_base register
+        // TODO: can I use constant table instead?
+        MOV     r1, 0
+        LBBO    ddr_base, r1, 0, 4
+
+        // move a value other than 1 or 2 to first address of ddr to indicate invalid data
+        MOV var1, DDR_INVALID
+        SBBO    var1, ddr_base, 0, 4
+
+        
+        // initialize ARM ack to 0
+        MOV var1, 0
+        //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
+        SBBO    var1, r1, 0, 4
+
+        CLR OE // pull buffer OE low to enable output
+
+        // jump to initialization of ddr, without overwriting DATA_INVALID value
+        QBA RESETDDR_1 
+
+RESETDDR:
+
+        // to indicate completion of a group of four frames
+        MOV var1, 1
+        SBBO    var1, ddr_base, 0, 4
+
+WAIT_ARM_ACK_1:
+        // wait for arm to ack completion of the data transfer
+        MOV r1, ARM_PRU_ACK_OFFSET
+        LBBO    var1, r1, 0, 4
+        QBNE    WAIT_ARM_ACK_1, var1, 1
+        // take possesion of ddr again
+        MOV var1, DDR_INVALID
+        SBBO    var1, ddr_base, 0, 4
+        // clear ack from ARM
+        MOV var1, 0
+        //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
+        SBBO    var1, r1, 0, 4
+
+RESETDDR_1:
+        // set DDR pointer to ddr base address
+        SBCO    ddr_base, CONST_PRUSHAREDRAM, CHUNKSIZE + 8, 4
+        LBCO    ddr_pointer, CONST_PRUSHAREDRAM, CHUNKSIZE + 8, 4
+        // reset DDR counter to 0
+        MOV ddr_counter, 0
+
+
+
+READ:
+
+        // TODO: change label of this register
+        LBCO transfer_ready, CONST_PRUSHAREDRAM, 4, 4 // == 1 if there's a fresh chunk to transfer
+
+        QBNE    WAIT, transfer_ready, 1
+
+
+        // transfer_ready == 1
+        // set transfer_ready back to 0 and copy to corresponding field in PRU shared ram
+        MOV transfer_ready, 0
+        SBCO    transfer_ready, CONST_PRUSHAREDRAM, 4, 4
+        // load data
+        LBCO    data_start, CONST_PRUSHAREDRAM, 8, CHUNKSIZE
+        
+        // copy it to DDR
+       SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE 
+        
+        //write ACK to PRU mem
+        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+
+        // increment DDR counter
+        ADD ddr_counter, ddr_counter, CHUNKSIZE
+
+        // increment DDR memory pointer
+        ADD ddr_pointer, ddr_pointer, CHUNKSIZE
+
+
+        // TODO: are these NOPs still necessary? probably not
+WAIT:
+        NOP
+        NOP
+        NOP
+        NOP
+        //check if we received the kill signal
+        QBBS    FRAME_END, r31, 30
+        //QBNE READ, reads_left, 0
+        // TODO: testing: want pr0 to read indefinitely
+        QBA READ 
+
+
+
+FRAME_END:
+
+    // clear the interrupt from pru1
+    LDI     var1, 18
+    SBCO    var1, C0, 0x24, 4 
+
+    // Send notification to to host that one frame has been read out
+    MOV       r31.b0, PRU0_ARM_INTERRUPT+16
+    
+    SUB   number_frames, number_frames, 1     // decrement loop counter
+    ADD   frame_counter, frame_counter, 1     // increment frame counter
+    QBEQ  DONE, number_frames, 0  // repeat loop unless zero
+    
+    // number of frames completed mod 4 == 0? 
+    MOV   var1, frame_counter.b0
+    //AND   var1, var1, 4
+
+    // reset ddr pointer every 4 frames
+    QBEQ  RESETDDR, var1, 4
+
+//    // otherwise write to first byte of ddr to indicate completion of an even frame
+//    MOV var1, 0
+//    SBBO    var1, ddr_base, 0, 4
+
+//WAIT_ARM_ACK_2:
+//    // and then wait for arm to ack start of a data transfer
+//    MOV r1, ARM_PRU_ACK_OFFSET
+//    LBBO    var1, r1, 0, 4
+//    QBNE    WAIT_ARM_ACK_2, var1, 1
+//    // clear ack from ARM
+//    MOV var1, 0
+//    //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
+//    SBBO    var1, r1, 0, 4
+
+    // finally resume readout
+    QBA   READ 
+
+
+DONE:
+    // give host time to process interrupt from pru1 before it a signal
+    MOV r1, DELAYCOUNT
+
+////DELAY:
+////    SUB   r1, r1, 1     // decrement loop counter
+////
+//    // Send notification to to host that one frame has been read out
+//    MOV       r31.b0, PRU0_ARM_INTERRUPT+16
+////    NOP
+//    QBNE    DONE, r1, 0  // repeat loop unless zero
+
+
+
+
+    // TODO: for testing purposes, don't set OE high when done
+    // SET OE 
+
+    // Halt the processor
+    HALT
+
+

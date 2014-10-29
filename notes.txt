@@ -1,0 +1,48 @@
+To check pinmux configuration:
+export PINS=/sys/kernel/debug/pinctrl/44e10800.pinmux/pins
+cat $PINS
+
+
+10/17/2014
+
+I was not able to make the hdmi and emmc pins work as outputs. Assuming they
+all work as inputs (only a few have been tested) this can be solved by some
+reshuffling. Specifically, SYSCLK needs to move from pin 28 to 12 (on p8), and
+a physical jumper is needed from pin 12 to pin 28. P9 pin 25 and p8 pin 28 must
+then also be configured as inputs. EXPOSURE, BUF_ENABLE, and DATAREAD are not
+essential and can be dispensed with. This change is now reflected in
+pinmux_config.sh and the pin assignments in pru firmware.
+
+I can't think of any straightforward way of testing pru firware short of
+plugging in the board.  Thus my next steps are to write tentative PRU driver
+that reads in a single frame, assemble the board, write software to configure
+the sensor via i2c, plug in the sensor, put it in single-trigger mode, and
+finally then try to take and record an exposure. 
+
+TODO:
+Make the system more fault tolerant. this includes allowing pru1 to send pru0 a
+signal for completion in case te number of pixels read is not consistent from
+readout to readout
+
+10/20
+Discovered that the reason I couldn't output to p8_30 and all those pins was that
+they belong to pru1. The test program was running on pru 0. Pinmuxing has been 
+re-changed, sysclk is p8_28 once again
+
+10/21
+For "hello world" from the sensor do the following: 
+i2cdetect -y -r 1
+To dump all register values:
+i2cdump -y 1 0x5d w
+Confirmed working with clock frequencies up to 33 MHz (6 PRU clock cycles per
+SYSCLK cycle)
+
+10/22 
+resolved problems with i2c comm (including full crashes of the i2c interface on
+the sensor) by putting in 10k pullup resistors (even though it is clamed the
+BBB has pullups configured by default). Improved i2c interface code, now an
+
+TODOs:
+-separate pru code to just provide a clock before the readout firmware is loaded
+
+array of address value pairs can be written all at once to the device.
