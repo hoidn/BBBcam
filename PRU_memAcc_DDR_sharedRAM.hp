@@ -93,15 +93,6 @@
 #define CTPPR0               0x28 // offset for programmable pointer register 0
 #define CTPPR1               0x2C // offset for programmable pointer register 1
 
-#define DDR_OFFSET 4
-#define CHUNKSIZE 64 // TODO: why 60 and not 64?
-#define NUMCHUNKS 10000000
-#define DDR_INVALID 2
-// offset in shared pru mem for data transfer ack from arm
-#define ARM_PRU_ACK_OFFSET 4
-#define ARM_PRU_ACK 1
-#define ARM_PRU_NACK 0
-#define FRAMES_PER_TRANSFER 4 // number of frames at a time for arm to copy
 
 // pin mappings
 // inputs
@@ -123,7 +114,16 @@
 // size in bytes of buffer to share with ARM, divided by 0x10000
 #define DDR_BUF_SIZE 0x40 // buf size: 0x400000
 #define DELAYCOUNT 100000000
-#define NUMFRAMES 80
+#define DDR_OFFSET 4
+#define CHUNKSIZE 64 // TODO: why 60 and not 64?
+#define NUMCHUNKS 10000000
+#define DDR_INVALID 2
+// offset in shared pru mem for data transfer ack from arm
+#define ARM_PRU_ACK_OFFSET 4
+#define ARM_PRU_ACK 1
+#define ARM_PRU_NACK 0
+#define FRAMES_PER_TRANSFER 1 // number of frames at a time for arm to copy
+#define NUMFRAMES 40
 
 //#define read_pr0 r1
 #define chunk_size r2
