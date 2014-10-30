@@ -1,3 +1,4 @@
+
 .origin 0
 
 .macro NOP

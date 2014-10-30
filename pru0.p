@@ -101,6 +101,7 @@ INIT:
         MOV     transfer_ready, 0
         MOV number_frames, NUMFRAMES + 1
         MOV frame_counter, 0
+        SUB frame_counter, frame_counter, 1 // intentional underflow
 
         // TODO: what does this do? (configure interrupts?)
         LBCO r0, CONST_PRUCFG, 0x34, 4                    
@@ -138,16 +139,16 @@ RESETDDR:
         SBBO    var1, ddr_base, 0, 4
 
 WAIT_ARM_ACK_1:
-        // wait for arm to ack completion of the data transfer
         MOV r1, ARM_PRU_ACK_OFFSET
         LBBO    var1, r1, 0, 4
         QBNE    WAIT_ARM_ACK_1, var1, 1
         // take possesion of ddr again
-        MOV var1, DDR_INVALID
-        SBBO    var1, ddr_base, 0, 4
+//        MOV var1, DDR_INVALID
+//        SBBO    var1, ddr_base, 0, 4
         // clear ack from ARM
         MOV var1, 0
         //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
+        // wait for arm to ack completion of the data transfer
         SBBO    var1, r1, 0, 4
 
 RESETDDR_1:
@@ -175,7 +176,7 @@ READ:
         LBCO    data_start, CONST_PRUSHAREDRAM, 8, CHUNKSIZE
         
         // copy it to DDR
-       SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE 
+        SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE 
         
         //write ACK to PRU mem
         SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
@@ -208,18 +209,18 @@ FRAME_END:
     SBCO    var1, C0, 0x24, 4 
 
     // Send notification to to host that one frame has been read out
-    MOV       r31.b0, PRU0_ARM_INTERRUPT+16
+    //MOV       r31.b0, PRU0_ARM_INTERRUPT+16
     
     SUB   number_frames, number_frames, 1     // decrement loop counter
     ADD   frame_counter, frame_counter, 1     // increment frame counter
     QBEQ  DONE, number_frames, 0  // repeat loop unless zero
     
-    // number of frames completed mod 4 == 0? 
+    // number of frames completed mod 2 == 0? 
     MOV   var1, frame_counter.b0
-    //AND   var1, var1, 4
+    AND   var1, var1, 0x3
 
     // reset ddr pointer every 4 frames
-    QBEQ  RESETDDR, var1, 4
+    QBEQ  RESETDDR, var1, 0x3
 
 //    // otherwise write to first byte of ddr to indicate completion of an even frame
 //    MOV var1, 0

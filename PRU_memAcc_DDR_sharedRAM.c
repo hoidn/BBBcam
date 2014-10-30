@@ -112,7 +112,8 @@
 #define PRUSS1_SHARED_DATARAM    4
 
 #define FILESIZE_BYTES 1280*1024
-#define NUMREADS 10  // number of frames to read
+#define NUMREADS 20  // number of frames to read
+#define FRAMES_PER_TRANSFER 4
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -162,7 +163,7 @@ int main (void)
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
 
     // allocate mem for frame buffer
-    frame = malloc(sizeof(uint8_t) * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
 
     printf("\nINFO: Starting %s example.\r\n", "PRU_memAcc_DDR_sharedRAM");
     /* Initialize the PRU */
@@ -205,7 +206,8 @@ int main (void)
     /* Execute example on PRU */
     printf("\tINFO: Executing example.\r\n");
 
-    prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin");
+    prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
+    prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin"); // start running clock
 
     delay_ms(999);
     // init i2c comm
@@ -214,6 +216,7 @@ int main (void)
     delay_ms(100);
     prussdrv_exec_program (PRU_NUM0, "./pru0.bin");
     prussdrv_exec_program (PRU_NUM1, "./pru1.bin");
+    delay_ms(100);
     // trigger an exposure
     // trigger a readout if we're doing single exposure mode
     //write16(MT9M001_FRAME_RESTART, 0x0001);
@@ -228,7 +231,7 @@ int main (void)
     }
     // TODO: do something with the captured frame here
 
-    prussdrv_pru_wait_event (PRU_EVTOUT_1);
+    //prussdrv_pru_wait_event (PRU_EVTOUT_1);
     printf("\tINFO: PRU 1 completed transfer.\r\n");
     prussdrv_pru_clear_event (PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
 
@@ -236,8 +239,8 @@ int main (void)
 //    printf("\tINFO: PRU 0 completed transfer.\r\n");
 //    prussdrv_pru_clear_event (PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
 
-    exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
-    //exposureWrite32("test.dat", (uint32_t *) frame, FILESIZE_BYTES / 4);
+    //exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
+    exposureWrite32("test.dat", (uint32_t *) frame, FILESIZE_BYTES / 4);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -292,13 +295,17 @@ static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr) {
     int datstatus = 2;
     while (datstatus != 1) {
         datstatus = ((uint32_t *) pruDdrPtr)[-1];
-        delay_ms(1);
+        delay_ms(10);
     }
-    // byte offset at which to read
+    // set status invalid for the next call of this function
+    ((uint32_t *) pruDdrPtr)[-1] = 2; 
+//    // byte offset at which to read
     offset = MT9M001_MAX_WIDTH * MT9M001_MAX_WIDTH;
-    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
-        frameptr[i] = pruDdrPtr[offset + i];
-    }
+//    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
+//        frameptr[i] = pruDdrPtr[offset + i];
+//    }
+    memcpy(frameptr, pruDdrPtr, FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+
     // acknowledge completion of a read
     ackPru();
 }
