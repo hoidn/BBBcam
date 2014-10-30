@@ -111,9 +111,10 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define FILESIZE_BYTES 1280*1024
 #define NUMREADS 20  // number of frames to read
 #define FRAMES_PER_TRANSFER 4
+#define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
+#define MAXVALUE 256
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -132,6 +133,7 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr);
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr);
 static void ackPru();
 static void nackPru();
+void makeHistograms(uint8_t *src, uint32_t *pixels, uint32_t *isolated, uint8_t threshold);
 
 /******************************************************************************
 * Local Variable Definitions                                                  *
@@ -160,10 +162,16 @@ int main (void)
 {
     unsigned int ret;
     uint8_t *frame; // frame buffer
+    uint8_t threshold = 30; // TODO: pass this as an argument to main
+    uint32_t *isolatedHisto; //histogram of value sof isolated pixels
+    uint32_t *pixelsHisto; //histogram of values of all pixels
+    
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
 
-    // allocate mem for frame buffer
+    // allocate mem for arrays
     frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    isolatedHisto = malloc(sizeof(uint32_t) * MAXVALUE);
+    pixelsHisto = malloc(sizeof(uint32_t) * MAXVALUE);
 
     printf("\nINFO: Starting %s example.\r\n", "PRU_memAcc_DDR_sharedRAM");
     /* Initialize the PRU */
@@ -227,7 +235,10 @@ int main (void)
         // capture a frame and place it in the malloc'd frame buffer
         exposure(frame, ddrMem + OFFSET_DDR);
     }
-    // TODO: do something with the captured frame here
+    for (int i = 0; i < FRAMES_PER_TRANSFER; i ++) {
+        // update histograms with data from this frame
+        makeHistograms(frame + i * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, pixelsHisto, isolatedHisto, threshold);
+    }
 
     prussdrv_pru_wait_event (PRU_EVTOUT_1);
     printf("\tINFO: PRU 1 completed transfer.\r\n");
@@ -239,6 +250,8 @@ int main (void)
 
     //exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
     exposureWrite32("test.dat", (uint32_t *) frame, FILESIZE_BYTES / 4);
+    exposureWrite32("singles.dat", (uint32_t *) isolatedHisto, MAXVALUE);
+    exposureWrite32("pixels.dat", (uint32_t *) pixelsHisto, MAXVALUE);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -347,15 +360,17 @@ static unsigned short LOCAL_examplePassed ( unsigned short pruNum )
 
 }
 
-//write uint32_t 2d array to file
+//write uint32_t array to file
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize) {
      FILE *fp;
      fp = fopen(fname, "wb");
      fwrite(arr, sizeof(uint32_t), arrSize, fp);
-     fclose(fp);
+     //fclose(fp);
      printf(fname);
      printf("\n");
 }
+
+
 
 // Map DDR shared memory segment into our address space and return addresses
 // and size.
@@ -397,5 +412,25 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
         return -1;
     }
    return 1;
+}
+
+// functions for creating a histogram of all pixels and of isolated above-thresold pixels
+void makeHistograms(uint8_t *src, uint32_t *pixels, uint32_t *isolated, uint8_t threshold) {
+    uint8_t bottom, top, left, right, center;
+    for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
+        for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
+            center = src[i * MT9M001_MAX_HEIGHT + j];
+            top = src[(i + 1) * MT9M001_MAX_HEIGHT + j];
+            bottom = src[(i - 1) * MT9M001_MAX_HEIGHT + j];
+            right = src[i * MT9M001_MAX_HEIGHT + (j + 1)];
+            left = src[i * MT9M001_MAX_HEIGHT + (j - 1)];
+
+            pixels[center] += 1;
+            // if all neighbors are below threshold
+            if ((center > threshold) && (top < threshold)  &&(bottom < threshold) && (right < threshold) && (left < threshold)) {
+                isolated[center] += 1;
+            }
+        }
+    }
 }
 
