@@ -129,7 +129,7 @@ static int LOCAL_exampleInit ( );
 static unsigned short LOCAL_examplePassed ( unsigned short pruNum );
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize);
 static void sendDDRbase();
-static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr);
+static int pru_allocate_ddr_memory();
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr);
 static void ackPru();
 static void nackPru();
@@ -150,7 +150,7 @@ void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_
 
 static int mem_fd;
 static void *ddrMem, *sharedMem;
-static uint32_t *DDR_physical;
+static uint32_t *DDR_physical; // physical device ddr address
 
 static unsigned int *sharedMem_int;
 
@@ -204,19 +204,13 @@ int main (void)
         return -1;
     }
     
-    // TODO: encapsulate all of this in an init function
-    pru_allocate_ddr_memory(DDR_physical);
-    /* Initialize pru memory, which consists of opening a mapping to the DDR memory
-       shared with the PRU and writing the corresponding physical address into
-       PRU mem */
+    
+    // initialize ddrMem and DDR_physical
+    pru_allocate_ddr_memory();
+    // Initialize contents of pru memory, which consists of writing the 
+    // corresponding physical address into  PRU mem 
     sendDDRbase();
 
-    //LOCAL_exampleInit(0);
-    //LOCAL_exampleInit(PRU_NUM0);
-
-
-    /* Execute example on PRU */
-    printf("\tINFO: Executing example.\r\n");
 
     prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
     prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin"); // start running clock
@@ -226,15 +220,14 @@ int main (void)
     printf("\tINFO: initializing i2c\r\n");
     init_readout();
     delay_ms(100);
+
+    printf("\tINFO: Executing PRU program.\r\n");
     prussdrv_exec_program (PRU_NUM0, "./pru0.bin");
     prussdrv_exec_program (PRU_NUM1, "./pru1.bin");
     delay_ms(100);
     // trigger an exposure
     // trigger a readout if we're doing single exposure mode
     //write16(MT9M001_FRAME_RESTART, 0x0001);
-
-    /* Wait until PRU0 has finished execution */
-    //printf("\tINFO: Waiting for HALT command.\r\n");
 
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
@@ -389,15 +382,13 @@ static void exposureWrite32(char *fname, uint32_t *arr, int arrSize) {
 
 
 
-// Map DDR shared memory segment into our address space and return addresses
-// and size.
+// Obtain physical base address of pru device memory, saving that in the provided pointer, 
+// and open a memory map, saving the corresponding virtual address in ddrMem
 //
-// ddrmem: Returns pointer to memory (virtual address).
-// ddr_phys_addr: Returns physical address of memory.
+// ddr_phys_addr: physical address of memory.
 // return: Size of region in bytes.
-static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
+static int pru_allocate_ddr_memory()
 {
-   //uint32_t ddr_offset, ddr_mem_size;
    uint32_t extra_offset = 0x10000000;
 
    FILE *fin = fopen("/sys/class/uio/uio0/maps/map1/addr", "r");
@@ -406,12 +397,12 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
      return -1;
    }
 
-   if (ddr_phys_addr == NULL) {
+   if (DDR_physical == NULL) {
         printf("attempt to dereference null pointer"); 
         return -1;
     }
    // load physical address
-   fscanf(fin, "%x", ddr_phys_addr);
+   fscanf(fin, "%x", DDR_physical);
    fclose(fin);
 
 
@@ -422,7 +413,7 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
         return -1;
     }
     // map memory
-    ddrMem = mmap(0, 0x0FFFFFFF, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, (uint32_t) (*ddr_phys_addr - extra_offset));
+    ddrMem = mmap(0, 0x0FFFFFFF, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, (uint32_t) (*DDR_physical - extra_offset));
     if (ddrMem == NULL) {
         printf("Failed to map the device (%s)\n", strerror(errno));
         close(mem_fd);
