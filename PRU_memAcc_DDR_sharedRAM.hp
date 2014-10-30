@@ -101,6 +101,7 @@
 #define ARM_PRU_ACK_OFFSET 4
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
+#define FRAMES_PER_TRANSFER 4 // number of frames at a time for arm to copy
 
 // pin mappings
 // inputs
@@ -122,7 +123,7 @@
 // size in bytes of buffer to share with ARM, divided by 0x10000
 #define DDR_BUF_SIZE 0x40 // buf size: 0x400000
 #define DELAYCOUNT 100000000
-#define NUMFRAMES 40
+#define NUMFRAMES 80
 
 //#define read_pr0 r1
 #define chunk_size r2
