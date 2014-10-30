@@ -38,10 +38,10 @@ oe_pru0.bin: oe_pru0.p
 
 
 MT9M001_i2c.o: MT9M001_i2c.c
-	gcc  -g  -c MT9M001_i2c.c `pkg-config --cflags --libs glib-2.0` 
+	gcc  -O3 -g  -c MT9M001_i2c.c `pkg-config --cflags --libs glib-2.0` 
 
 PRU_memAcc_DDR_sharedRAM.o: 
-	gcc  -g -std=c99 -c PRU_memAcc_DDR_sharedRAM.c
+	gcc  -O3 -g -std=c99 -c PRU_memAcc_DDR_sharedRAM.c
 
 
 $(OBJDIR)/%.o: %.c $(DEPS) MT9M001_i2c.o
@@ -54,10 +54,10 @@ $(OBJDIR)/%.o: %.c $(DEPS) MT9M001_i2c.o
 #$(TARGET): $(OBJ) MT9M001_i2c.o
 #	$(CROSS_COMPILE)gcc $(CFLAGS) $(OBJ) -o $@ $^ $(LDFLAGS)
 PRU_memAcc_DDR_sharedRAM: PRU_memAcc_DDR_sharedRAM.o MT9M001_i2c.o 
-	gcc  -g -std=c99 -Wall -I../../app_loader/include -D__DEBUG -g -mtune=cortex-a8 -march=armv7-a  -L../../app_loader/lib -lprussdrv  `pkg-config --cflags --libs glib-2.0` PRU_memAcc_DDR_sharedRAM.o MT9M001_i2c.o -o PRU_memAcc_DDR_sharedRAM
+	gcc  -O3 -g -std=c99 -Wall -I../../app_loader/include -D__DEBUG -g -mtune=cortex-a8 -march=armv7-a  -L../../app_loader/lib -lprussdrv  `pkg-config --cflags --libs glib-2.0` PRU_memAcc_DDR_sharedRAM.o MT9M001_i2c.o -o PRU_memAcc_DDR_sharedRAM
 
 OE: 
-	gcc  -g -std=c99 -Wall -I../../app_loader/include -D__DEBUG -g -mtune=cortex-a8 -march=armv7-a  -L../../app_loader/lib -lprussdrv  `pkg-config --cflags --libs glib-2.0` OE.c -o OE
+	gcc  -O3 -g -std=c99 -Wall -I../../app_loader/include -D__DEBUG -g -mtune=cortex-a8 -march=armv7-a  -L../../app_loader/lib -lprussdrv  `pkg-config --cflags --libs glib-2.0` OE.c -o OE
 
 .PHONY: clean
 

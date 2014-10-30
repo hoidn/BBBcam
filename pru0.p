@@ -149,17 +149,17 @@ WAIT_ARM_ACK_1:
         MOV var1, 0
         SBBO    var1, r1, 0, 4
 
-// flush one frame (it's overexposed)
-FLUSH:
-        //write ACK to PRU mem
-        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        QBBC    FLUSH, r31, 30
+//// flush one frame (it's overexposed)
+//FLUSH:
+//        //write ACK to PRU mem
+//        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        QBBC    FLUSH, r31, 30
 
         // clear the interrupt from pru1
         LDI     var1, 18

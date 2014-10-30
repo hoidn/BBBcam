@@ -111,8 +111,8 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define NUMREADS 20  // number of frames to read
-#define FRAMES_PER_TRANSFER 4
+#define NUMREADS 40  // number of frames to read
+#define FRAMES_PER_TRANSFER 1
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 
@@ -133,7 +133,7 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr);
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr);
 static void ackPru();
 static void nackPru();
-void makeHistograms(uint8_t *src, uint32_t *pixels, uint32_t *isolated, uint8_t threshold);
+void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold);
 
 /******************************************************************************
 * Local Variable Definitions                                                  *
@@ -162,9 +162,11 @@ int main (void)
 {
     unsigned int ret;
     uint8_t *frame; // frame buffer
+    uint8_t *frameAvg; // average of all the frames
     uint8_t threshold = 30; // TODO: pass this as an argument to main
     uint32_t *isolatedHisto; //histogram of value sof isolated pixels
     uint32_t *pixelsHisto; //histogram of values of all pixels
+    uint32_t *frameSum; //histogram of values of all pixels
     
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
 
@@ -172,6 +174,9 @@ int main (void)
     frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
     isolatedHisto = malloc(sizeof(uint32_t) * MAXVALUE);
     pixelsHisto = malloc(sizeof(uint32_t) * MAXVALUE);
+    frameSum = malloc(sizeof(uint32_t) * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    frameAvg = malloc(sizeof(uint32_t) * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4);
+    // TODO: modify makeHistogramsAndSum
 
     printf("\nINFO: Starting %s example.\r\n", "PRU_memAcc_DDR_sharedRAM");
     /* Initialize the PRU */
@@ -234,10 +239,12 @@ int main (void)
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
         exposure(frame, ddrMem + OFFSET_DDR);
-    }
-    for (int i = 0; i < FRAMES_PER_TRANSFER; i ++) {
-        // update histograms with data from this frame
-        makeHistograms(frame + i * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, pixelsHisto, isolatedHisto, threshold);
+        if (i > 0) { // throw out i = 0
+            for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
+                // update histograms with data from this frame
+                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, frameSum, pixelsHisto, isolatedHisto, threshold);
+            }
+        }
     }
 
     prussdrv_pru_wait_event (PRU_EVTOUT_1);
@@ -248,10 +255,20 @@ int main (void)
 //    printf("\tINFO: PRU 0 completed transfer.\r\n");
 //    prussdrv_pru_clear_event (PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
 
+
+    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/(NUMREADS - 1));
+        }
+    }
+
+
     //exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
     exposureWrite32("test.dat", (uint32_t *) frame, FILESIZE_BYTES / 4);
     exposureWrite32("singles.dat", (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32("pixels.dat", (uint32_t *) pixelsHisto, MAXVALUE);
+    //exposureWrite32("sum.dat",  frameSum, FILESIZE_BYTES);
+    exposureWrite32("average.dat", (uint32_t *) frameAvg, FILESIZE_BYTES / 4);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -414,17 +431,18 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
    return 1;
 }
 
-// functions for creating a histogram of all pixels and of isolated above-thresold pixels
-void makeHistograms(uint8_t *src, uint32_t *pixels, uint32_t *isolated, uint8_t threshold) {
+// functions for creating a histogram of all pixels and of isolated above-thresold pixels, also 
+// adding the frame onto a sum-of-frames array
+void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold) {
     uint8_t bottom, top, left, right, center;
     for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
-            center = src[i * MT9M001_MAX_HEIGHT + j];
-            top = src[(i + 1) * MT9M001_MAX_HEIGHT + j];
-            bottom = src[(i - 1) * MT9M001_MAX_HEIGHT + j];
-            right = src[i * MT9M001_MAX_HEIGHT + (j + 1)];
-            left = src[i * MT9M001_MAX_HEIGHT + (j - 1)];
-
+            sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+            center = src[i * MT9M001_MAX_WIDTH + j];
+            top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
+            bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
+            right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
+            left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
             pixels[center] += 1;
             // if all neighbors are below threshold
             if ((center > threshold) && (top < threshold)  &&(bottom < threshold) && (right < threshold) && (left < threshold)) {
