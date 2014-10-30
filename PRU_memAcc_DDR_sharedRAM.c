@@ -182,7 +182,6 @@ int main (void)
     prussdrv_pruintc_init(&pruss_intc_initdata);
 
     printf("\tINFO: Initializing example.\r\n");
-    //sendDDRbase();
 
    // initialize DDR_physical and ddrMem
     DDR_physical = malloc(sizeof(uint32_t));
@@ -224,14 +223,13 @@ int main (void)
     /* Wait until PRU0 has finished execution */
     //printf("\tINFO: Waiting for HALT command.\r\n");
 
-    //ackPru(); // "acknowledge" a read start to get the  prus rolling
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
         exposure(frame, ddrMem + OFFSET_DDR);
     }
     // TODO: do something with the captured frame here
 
-    //prussdrv_pru_wait_event (PRU_EVTOUT_1);
+    prussdrv_pru_wait_event (PRU_EVTOUT_1);
     printf("\tINFO: PRU 1 completed transfer.\r\n");
     prussdrv_pru_clear_event (PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
 
@@ -247,11 +245,6 @@ int main (void)
 //    prussdrv_pru_disable(PRU_NUM1);
 
     prussdrv_exit ();
-    
-    // TODO this should be encpsulated in a cleanup function
-    //munmap(ddrMem, 0x0FFFFFFF);
-    //close(mem_fd);
-
     return(0);
 }
 
@@ -259,27 +252,6 @@ int main (void)
 * Local Function Definitions                                                 *
 *****************************************************************************/
 
-///* 
-//read an exposure from PRU memory and place it in frameptr
-//args: 
-//    frameptr: ptr to array to which to move the data
-//    pruDdrPtr: ptr to pru shared ddr memory
-//    numMod2: indicates frame position within ddr mem (can be 0 or 1)
-//*/
-//static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int numMod2) {
-//    uint32_t offset;
-//    // wait for interrupt from pru0 indicating we can start reading
-//    prussdrv_pru_wait_event (PRU_EVTOUT_0);
-//
-//    // byte offset at which to read
-//    offset = numMod2 * MT9M001_MAX_WIDTH * MT9M001_MAX_WIDTH;
-////    for (int i = 0; i ++; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT) {
-////        frameptr[i] = pruDdrPtr[offset + i];
-////    }
-//    // clear the interrupt
-//    prussdrv_pru_clear_event (PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
-//}
-//
 
 /* 
 read an exposure from PRU memory and place it in frameptr
@@ -290,7 +262,6 @@ args:
     numMod2: indicates frame position within ddr mem (can be 0 or 1)
 */
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr) {
-    uint32_t offset;
     // wait for interrupt from pru0 indicating we can start reading
     int datstatus = 2;
     while (datstatus != 1) {
@@ -299,51 +270,11 @@ static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr) {
     }
     // set status invalid for the next call of this function
     ((uint32_t *) pruDdrPtr)[-1] = 2; 
-//    // byte offset at which to read
-    offset = MT9M001_MAX_WIDTH * MT9M001_MAX_WIDTH;
-//    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
-//        frameptr[i] = pruDdrPtr[offset + i];
-//    }
     memcpy(frameptr, pruDdrPtr, FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
-
     // acknowledge completion of a read
     ackPru();
 }
 
-//static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int chunkNum) {
-//    uint32_t offset;
-//    // wait for interrupt from pru0 indicating we can start reading
-//    int datstatus = 2;
-//    while (datstatus != chunkNum) {
-//        datstatus = ((uint32_t *) pruDdrPtr)[-1];
-//        delay_ms(1);
-//    }
-//    // acknowledge start of a read
-//    ackPru();
-//    // byte offset at which to read
-//    offset = chunkNum * MT9M001_MAX_WIDTH * MT9M001_MAX_WIDTH;
-//    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
-//        frameptr[i] = pruDdrPtr[offset + i];
-//    }
-//}
-//
-
-// write the DDR base address to PRU0's pru mem
-/*
-static void sendDDRbase() {
-    uint32_t *DDRbase;
-
-    FILE *fd = fopen("/sys/class/uio/uio0/maps/map1/addr", "r");
-    //fread(&DDRbase, sizeof(void *), 1, fd);
-    if (fd == NULL) {
-        printf("Unable to open DDR map address");
-        exit(1);
-    }
-    fscanf(fd, "%x", DDRbase);
-    prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, 0x0, (const unsigned int *) DDRbase, 4);
-    fclose(fd);
-}
-*/
 
 
 // write the DDR physical base address to PRU0's pru mem
@@ -465,39 +396,6 @@ static int pru_allocate_ddr_memory(uint32_t *ddr_phys_addr)
         close(mem_fd);
         return -1;
     }
-
-//   fin = fopen("/sys/class/uio/uio0/maps/map1/offset", "r");
-//   if (fin == NULL) {
-//      perror("Unable to open DDR map offset");
-//      exit(1);
-//   }
-//   fscanf(fin, "%x", &ddr_offset);
-//   fclose(fin);
-
-//   fin = fopen("/sys/class/uio/uio0/maps/map1/size", "r");
-//   if (fin == NULL) {
-//      perror("Unable to open DDR map address");
-//      exit(1);
-//   }
-//   fscanf(fin, "%x", &ddr_mem_size);
-//   fclose(fin);
-//   //printf("DDR base %x offset %x size %x\n", ddr_base, ddr_offset,
-//   //       ddrMemSize);
-
- //  *ddrmem = prussdrv_get_virt_addr(*ddr_phys_addr + ddr_offset);
-
-
-
    return 1;
-   //return (ddr_mem_size);
 }
 
-////write uint16_t 2d array to file
-//void exposureWrite(char *fname, uint16_t arr[][DIMY], int arrSize) {
-//     FILE *fp;
-//     fp = fopen(fname, "wb");
-//     fwrite(arr, sizeof(uint16_t), arrSize, fp);
-//     fclose(fp);
-//     printf(fname);
-//     printf("\n");
-//}

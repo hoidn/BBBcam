@@ -147,9 +147,23 @@ WAIT_ARM_ACK_1:
 //        SBBO    var1, ddr_base, 0, 4
         // clear ack from ARM
         MOV var1, 0
-        //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
-        // wait for arm to ack completion of the data transfer
         SBBO    var1, r1, 0, 4
+
+// flush one frame (it's overexposed)
+FLUSH:
+        //write ACK to PRU mem
+        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+        NOP
+        NOP
+        NOP
+        NOP
+        NOP
+        NOP
+        QBBC    FLUSH, r31, 30
+
+        // clear the interrupt from pru1
+        LDI     var1, 18
+        SBCO    var1, C0, 0x24, 4 
 
 RESETDDR_1:
         // set DDR pointer to ddr base address
@@ -157,8 +171,7 @@ RESETDDR_1:
         LBCO    ddr_pointer, CONST_PRUSHAREDRAM, CHUNKSIZE + 8, 4
         // reset DDR counter to 0
         MOV ddr_counter, 0
-
-
+    
 
 READ:
 
@@ -217,10 +230,10 @@ FRAME_END:
     
     // number of frames completed mod 2 == 0? 
     MOV   var1, frame_counter.b0
-    AND   var1, var1, 0x3
+    AND   var1, var1, (FRAMES_PER_TRANSFER - 1)
 
     // reset ddr pointer every 4 frames
-    QBEQ  RESETDDR, var1, 0x3
+    QBEQ  RESETDDR, var1, (FRAMES_PER_TRANSFER - 1)
 
 //    // otherwise write to first byte of ddr to indicate completion of an even frame
 //    MOV var1, 0
