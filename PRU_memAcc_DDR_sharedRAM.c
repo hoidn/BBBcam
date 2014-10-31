@@ -115,6 +115,7 @@
 #define FRAMES_PER_TRANSFER 1
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
+#define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -125,15 +126,17 @@
 * Local Function Declarations                                                 *
 ******************************************************************************/
 
-static int LOCAL_exampleInit ( );
-static unsigned short LOCAL_examplePassed ( unsigned short pruNum );
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize);
 static void sendDDRbase();
 static int pru_allocate_ddr_memory();
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr);
 static void ackPru();
 static void nackPru();
-void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold);
+static char *concatStr(char *str1, char *str2, int bufSize);
+static void usage(char *name);
+static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
+static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame);
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold);
 
 /******************************************************************************
 * Local Variable Definitions                                                  *
@@ -158,16 +161,80 @@ static unsigned int *sharedMem_int;
 * Global Function Definitions                                                 *
 ******************************************************************************/
 
-int main (void)
+int main (int argc, char **argv)
 {
+    int threshold;
+    char *end; // error handling for strol
+
+    // optional dark count subtraction file
+    char *darkName; 
+    FILE *fdark = NULL;
+    uint8_t *darkFrame;
+
+    // optional output file prefix
+    char *fname = NULL;
+
+
+    // handle command line arguments
+    if (argc < 2 || argc > 6) {
+        usage(argv[0]);
+        return -1;
+    }
+
+    // positional arguments (only one of them)
+    threshold = strtol(argv[1], &end, 10);
+    if (!*end) {
+        printf("threshold value: %d", threshold);
+    } else {
+        usage(argv[0]);
+    }
+
+    if (argc > 2) {
+        for (int i = 2; i < argc; i ++) {
+            if (i + 2 > argc) {
+                usage(argv[0]);
+                exit(1);
+            }
+            if (strcmp(argv[i], "-o") == 0) {
+                i ++;
+                fname = argv[i];
+            } else if (strcmp(argv[i], "-d") == 0) {
+                i ++; 
+                darkName = argv[i];
+                if ((fdark = fopen(darkName, "rb")) == NULL) {
+                    printf("Can't open file: %s \n", darkName);
+                    exit(1);
+                }
+            }
+        }
+    }
+
+    if (fdark != NULL) {
+        darkFrame = malloc(sizeof(uint8_t) * FRAMESIZE);
+        fread(darkFrame, sizeof(darkFrame[0]), FRAMESIZE/sizeof(darkFrame[0]), fdark);
+        fclose(fdark);
+        // TODO: do something with the dark frame
+        //subArrays((uint16_t *) frame, (uint16_t *) darkFrame, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    } else {
+        darkFrame = NULL;
+    }
+
+    run_acquisition(threshold, fname, darkFrame);
+
+    return 0;
+}
+
+    
+static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) {
     unsigned int ret;
     uint8_t *frame; // frame buffer
     uint8_t *frameAvg; // average of all the frames
-    uint8_t threshold = 30; // TODO: pass this as an argument to main
     uint32_t *isolatedHisto; //histogram of value sof isolated pixels
     uint32_t *pixelsHisto; //histogram of values of all pixels
     uint32_t *frameSum; //histogram of values of all pixels
-    
+    int bufSize = 256; // buffer for output file name strings
+    char nameBuffer[bufSize];
+
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
 
     // allocate mem for arrays
@@ -235,7 +302,7 @@ int main (void)
         if (i > 0) { // throw out i = 0
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
                 // update histograms with data from this frame
-                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, frameSum, pixelsHisto, isolatedHisto, threshold);
+                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, frameSum, pixelsHisto, isolatedHisto, threshold);
             }
         }
     }
@@ -257,11 +324,11 @@ int main (void)
 
 
     //exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
-    exposureWrite32("test.dat", (uint32_t *) frame, FILESIZE_BYTES / 4);
-    exposureWrite32("singles.dat", (uint32_t *) isolatedHisto, MAXVALUE);
-    exposureWrite32("pixels.dat", (uint32_t *) pixelsHisto, MAXVALUE);
+    exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, FILESIZE_BYTES / 4);
+    exposureWrite32(concatStr(prefix, "singles.dat", bufSize), (uint32_t *) isolatedHisto, MAXVALUE);
+    exposureWrite32(concatStr(prefix, "pixels.dat", bufSize), (uint32_t *) pixelsHisto, MAXVALUE);
     //exposureWrite32("sum.dat",  frameSum, FILESIZE_BYTES);
-    exposureWrite32("average.dat", (uint32_t *) frameAvg, FILESIZE_BYTES / 4);
+    exposureWrite32(concatStr(prefix, "average.dat", bufSize), (uint32_t *) frameAvg, FILESIZE_BYTES / 4);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -271,10 +338,24 @@ int main (void)
     return(0);
 }
 
+
 /*****************************************************************************
 * Local Function Definitions                                                 *
 *****************************************************************************/
 
+// return char * to new string that's a concatenation of str1 and str2
+static char *concatStr(char *str1, char *str2, int bufSize) {
+    char *nameBuffer = malloc(sizeof(char) * bufSize);
+    strncpy(nameBuffer, str1, bufSize);
+    strncat(nameBuffer, str2, bufSize);
+    return nameBuffer;
+}
+    
+
+// usage statement
+static void usage(char *name) {
+    printf("usage: %s threshold -o filename -d [darkfilename]\n", name);
+}
 
 /* 
 read an exposure from PRU memory and place it in frameptr
@@ -299,9 +380,7 @@ static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr) {
 }
 
 
-
 // write the DDR physical base address to PRU0's pru mem
-
 static void sendDDRbase() {
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, 0x0, (const unsigned int *) DDR_physical, 4);
 }
@@ -318,56 +397,6 @@ static void nackPru() {
     int nack = ARM_PRU_NACK;
     prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &nack, 4);
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &nack, 4);
-}
-
-    
-static int LOCAL_exampleInit (  )
-{
-    void *DDR_regaddr1, *DDR_regaddr2, *DDR_regaddr3;
-
-    /* open the device */
-    mem_fd = open("/dev/mem", O_RDWR);
-    if (mem_fd < 0) {
-        printf("Failed to open /dev/mem (%s)\n", strerror(errno));
-        return -1;
-    }
-
-
-     // map the DDR memory 
-    ddrMem = mmap(0, 0x0FFFFFFF, PROT_WRITE | PROT_READ, MAP_SHARED, mem_fd, DDR_BASEADDR);
-    if (ddrMem == NULL) {
-        printf("Failed to map the device (%s)\n", strerror(errno));
-        close(mem_fd);
-        return -1;
-    }
-
-
-    /* Store Addends in DDR memory location */
-    DDR_regaddr1 = ddrMem + OFFSET_DDR;
-    DDR_regaddr2 = ddrMem + OFFSET_DDR + 0x00000004;
-    DDR_regaddr3 = ddrMem + OFFSET_DDR + 0x00000008;
-
-    *(unsigned long*) DDR_regaddr1 = ADDEND1;
-    *(unsigned long*) DDR_regaddr2 = ADDEND2;
-    *(unsigned long*) DDR_regaddr3 = ADDEND3;
-
-    return(0);
-}
-
-static unsigned short LOCAL_examplePassed ( unsigned short pruNum )
-{
-    unsigned int result_0, result_1, result_2;
-
-     /* Allocate Shared PRU memory. */
-    prussdrv_map_prumem(PRUSS1_SHARED_DATARAM, &sharedMem);
-    sharedMem_int = (unsigned int*) sharedMem;
-
-    result_0 = sharedMem_int[OFFSET_SHAREDRAM];
-    result_1 = sharedMem_int[OFFSET_SHAREDRAM + 1];
-    result_2 = sharedMem_int[OFFSET_SHAREDRAM + 2];
-
-    return ((result_0 == ADDEND1) & (result_1 ==  ADDEND2) & (result_2 ==  ADDEND3)) ;
-
 }
 
 //write uint32_t array to file
@@ -424,8 +453,14 @@ static int pru_allocate_ddr_memory()
 
 // functions for creating a histogram of all pixels and of isolated above-thresold pixels, also 
 // adding the frame onto a sum-of-frames array
-void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold) {
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint8_t threshold) {
     uint8_t bottom, top, left, right, center;
+
+    // dark frame subtraction
+    if (darkFrame != NULL) {
+        subArrays(src, darkFrame, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    }
+
     for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
             sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
@@ -443,3 +478,16 @@ void makeHistogramsAndSum(uint8_t *src, uint32_t *sum, uint32_t *pixels, uint32_
     }
 }
 
+
+//subtract arr2 from arr1, handling underflows
+static void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
+    for (int i = 0; i < size; i ++) {
+        //to avoid underflows we set t corrected frame to 0 werever the
+        //value in the dark frame exceeds it
+        if (arr2[i] > arr1[i]) {
+            arr1[i] = 0;
+        } else {
+            arr1[i] -= arr2[i];
+        }
+    }
+}
