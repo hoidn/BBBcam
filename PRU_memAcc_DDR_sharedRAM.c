@@ -1,6 +1,10 @@
 // TODO: recent additions aren't compatible with FRAMES_PER_TRANSFER > 1
 // TODO: segfaults if no output file prefix is provided
 // TODO: package arguments to makeHistogramsAndSum in a struct?
+// TODO: change hard-coded gain to value acceptable for x-ray spectroscopy mode
+// TODO: pass the number of frames to read as a runtime parameter to the prus
+// TODO: look into using XIN and XOUT (now that we know there was an issue with interrupt 
+// handling back when this was attempted)
 /*
  * PRU_memAccess_DDR_PRUsharedRAM.c
  *
