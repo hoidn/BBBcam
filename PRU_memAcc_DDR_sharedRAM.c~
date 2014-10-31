@@ -1,5 +1,4 @@
 // TODO: recent additions aren't compatible with FRAMES_PER_TRANSFER > 1
-// TODO: segfaults if no output file prefix is provided
 // TODO: package arguments to makeHistogramsAndSum in a struct?
 /*
  * PRU_memAccess_DDR_PRUsharedRAM.c
