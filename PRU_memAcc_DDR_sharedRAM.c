@@ -331,17 +331,17 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
 
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
         for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/(NUMREADS - 1));
+            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/((NUMREADS - 1) * FRAMES_PER_TRANSFER));
         }
     }
 
 
     //exposureWrite32("newtest.dat", ddrMem + OFFSET_DDR, FILESIZE_BYTES/4);
-    exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, FILESIZE_BYTES / 4);
+    exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
     exposureWrite32(concatStr(prefix, "singles.dat", bufSize), (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32(concatStr(prefix, "pixels.dat", bufSize), (uint32_t *) pixelsHisto, MAXVALUE);
     //exposureWrite32("sum.dat",  frameSum, FILESIZE_BYTES);
-    exposureWrite32(concatStr(prefix, "average.dat", bufSize), (uint32_t *) frameAvg, FILESIZE_BYTES / 4);
+    exposureWrite32(concatStr(prefix, "average.dat", bufSize), (uint32_t *) frameAvg, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT/4);
     exposureWrite32(concatStr(prefix, "2dhisto.dat", bufSize), (uint32_t *) isolated2DHistogram, MAXVALUE * MT9M001_MAX_HEIGHT);
 
 //    /* Disable PRU and close memory mapping*/
