@@ -144,8 +144,8 @@ INIT:
         MOV r0, 0
         MOV     transfer_ready, 1
         // TODO: inconsistency with number_frames between pru0 and pru1
-        //MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
-        MOV number_frames, NUMFRAMES 
+        MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
+        //MOV number_frames, NUMFRAMES 
         MOV frame_counter, 0
         //MOV pixel_counter, 0
 

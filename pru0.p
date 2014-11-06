@@ -149,17 +149,17 @@ WAIT_ARM_ACK_1:
         MOV var1, 0
         SBBO    var1, r1, 0, 4
 
-//// flush one frame (it's overexposed)
-//FLUSH:
-//        //write ACK to PRU mem
-//        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
-//        NOP
-//        NOP
-//        NOP
-//        NOP
-//        NOP
-//        NOP
-//        QBBC    FLUSH, r31, 30
+// flush one frame (it's overexposed)
+FLUSH:
+        //write ACK to PRU mem
+        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+        NOP
+        NOP
+        NOP
+        NOP
+        NOP
+        NOP
+        QBBC    FLUSH, r31, 30
 
         // clear the interrupt from pru1
         LDI     var1, 18
@@ -228,7 +228,7 @@ FRAME_END:
     ADD   frame_counter, frame_counter, 1     // increment frame counter
     QBEQ  DONE, number_frames, 0  // repeat loop unless zero
     
-    // number of frames completed mod 2 == 0? 
+    // number of frames completed FRAMES_PER_TRANSFER == 0? 
     MOV   var1, frame_counter.b0
     AND   var1, var1, (FRAMES_PER_TRANSFER - 1)
 

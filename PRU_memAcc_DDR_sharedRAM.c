@@ -118,8 +118,8 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define NUMREADS 40  // number of frames to read
-#define FRAMES_PER_TRANSFER 1
+#define NUMREADS 10  // number of batches of frames
+#define FRAMES_PER_TRANSFER 4
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 #define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
@@ -336,7 +336,7 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     }
 
 
-    //exposureWrite32("test.dat", ddrMem + OFFSET_DDR, 5 * FILESIZE_BYTES/4);
+    //exposureWrite32("newtest.dat", ddrMem + OFFSET_DDR, FILESIZE_BYTES/4);
     exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, FILESIZE_BYTES / 4);
     exposureWrite32(concatStr(prefix, "singles.dat", bufSize), (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32(concatStr(prefix, "pixels.dat", bufSize), (uint32_t *) pixelsHisto, MAXVALUE);
