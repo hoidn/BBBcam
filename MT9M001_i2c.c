@@ -45,7 +45,7 @@ const AddrVal params_1280x1024_continuous[]={
     //MT9M001_READ_OPTIONS1, 0x8100,//enable snapshot mode 
     //MT9M001_SHUTTER_WIDTH, 0x0800, // shutter width
     MT9M001_BLACK_LEVEL, 0x049a, //disable black level correction
-    //MT9M001_GLOBAL_GAIN, 0x007f, //increase gain
+    MT9M001_GLOBAL_GAIN, 0x007f, //increase gain
     MT9M001_OUTPUT_CONTROL, 0x0002,//finish editing regs
     //MT9M001_OUTPUT_CONTROL, (1 << 6),//test data
     0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
