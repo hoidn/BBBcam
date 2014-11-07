@@ -1,7 +1,7 @@
-// TODO: recent additions aren't compatible with FRAMES_PER_TRANSFER > 1
 // TODO: segfaults if no output file prefix is provided
+// TODO: try out flush-free mode again and, if it doesn't cause data quality issues, reinstate it
+// but some more work needs to be done to handle the edge case of FRAMES_PER_TRANSFER == 1
 // TODO: package arguments to makeHistogramsAndSum in a struct?
-// TODO: change hard-coded gain to value acceptable for x-ray spectroscopy mode
 // TODO: pass the number of frames to read as a runtime parameter to the prus
 // TODO: look into using XIN and XOUT (now that we know there was an issue with interrupt 
 // handling back when this was attempted)
@@ -78,6 +78,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <pruss_intc_mapping.h>
+#include <assert.h>
 
 // Driver header file
 #include "prussdrv.h"
@@ -145,6 +146,12 @@ static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
 static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame);
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold);
 void update2DHisto(uint8_t *frame, uint32_t *histo);
+static void transpose(uint8_t *arrA, uint8_t *arrB, int n, int m);
+static void subtractRows(uint8_t *arrA, int n, int m);
+static void subtractDiagBias(uint8_t *arrA);
+static void diagAverages(uint8_t *arrA);
+static void subConstant(uint8_t *arr, uint8_t subConstant, int size);
+static uint8_t arrayMean(uint8_t *arr, int size);
 
 /******************************************************************************
 * Local Variable Definitions                                                  *
@@ -164,6 +171,11 @@ static void *ddrMem, *sharedMem;
 static uint32_t *DDR_physical; // physical device ddr address
 
 static unsigned int *sharedMem_int;
+static uint8_t checkerboardEvenAverage = 0;
+static uint8_t checkerboardOddAverage = 0;
+// dark level based on provided dark exposure
+static uint8_t darkLevel = 0; 
+uint8_t *tFrame; // array to hold transposed frame
 
 /******************************************************************************
 * Global Function Definitions                                                 *
@@ -256,6 +268,8 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
     frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
     isolated2DHistogram = calloc(MAXVALUE * MT9M001_MAX_HEIGHT, sizeof(uint32_t));
+    // frame to hold transposed arrays
+    tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
     // TODO: modify makeHistogramsAndSum
 
     printf("\nINFO: Starting %s example.\r\n", "PRU_memAcc_DDR_sharedRAM");
@@ -309,14 +323,24 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     // trigger a readout if we're doing single exposure mode
     //write16(MT9M001_FRAME_RESTART, 0x0001);
 
+    // initialize the dark level using the dark frame
+    if (darkFrame != NULL) {
+        darkLevel = arrayMean(darkFrame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
+        printf("%d \n", darkLevel);
+    }
+
+    // TODO: deal with flushing better
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
         exposure(frame, ddrMem + OFFSET_DDR);
-        if (i > 0) { // throw out i = 0
+        if (i > 0) { // throw out i = 0, on really necessary if first frames aren't beng flushed
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
                 // update histograms with data from this frame
                 makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
             }
+        } else { // i == 0 -> calculate the diagonal components
+            makeHistogramsAndSum(frame, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
+            diagAverages(frame);
         }
     }
 
@@ -470,9 +494,28 @@ static int pru_allocate_ddr_memory()
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold) {
     uint8_t bottom, top, left, right, center;
 
-    // dark frame subtraction
+    // subtract row-to-row variation
+    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+    // transpose and move to tFrame
+    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+    // do the same on the transposed frame
+    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+
+    // subtract "checkerboard" variation"
+    // TODO: any good reason to pass these as parameters? 
+    // check that the checkerboard parameters have been initialized
+    printf("%d, %d\n", checkerboardEvenAverage, checkerboardOddAverage);
+    subtractDiagBias(src);
+
+    // dark level subtraction
     if (darkFrame != NULL) {
-        subArrays(src, darkFrame, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+        //assert(darkLevel != 0); // check dark level is initialized
+        printf("subtracting\n");
+        printf("first element before: %d\n", src[500000]);
+        subConstant(src, darkLevel, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+        printf("first element after: %d\n", src[500000]);
+        //subArrays(src, darkFrame, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
     }
     // initialize to 0 the array that will hold isolated events
     for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
@@ -505,11 +548,12 @@ static void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
     for (int i = 0; i < size; i ++) {
         //to avoid underflows we set t corrected frame to 0 werever the
         //value in the dark frame exceeds it
-        if (arr2[i] > arr1[i]) {
-            arr1[i] = 0;
-        } else {
-            arr1[i] -= arr2[i];
-        }
+//        if (arr2[i] > arr1[i]) {
+//            arr1[i] = 0;
+//        } else {
+//            arr1[i] -= arr2[i];
+//        }
+        arr1[i] -= arr2[i];
     }
 }
 
@@ -527,3 +571,96 @@ void update2DHisto(uint8_t *frame, uint32_t *histo) {
     }
 }
 
+//subtract out row-to-row variation of the mean pixel value for an n x m array
+static void subtractRows(uint8_t *arrA, int n, int m) {
+    int rowVals[n]; //counts in each row
+    int frameVal = 0; //total counts in the frame
+    for (int i = 0; i < n; i ++) {
+        rowVals[i] = 0;
+        for (int j = 0; j < m; j ++) {
+            rowVals[i] += (int) arrA[m * i + j];
+        }
+        frameVal += rowVals[i];
+    }
+    int mean = frameVal/n; //mean row value
+    int rowCorrection;
+    int newpix;
+    for (int i = 0; i < n; i ++) {
+        rowCorrection = (mean - rowVals[i])/m;
+        for (int j = 0; j < m; j ++) {
+            newpix = rowCorrection + (int) arrA[m * i + j];
+            //watching out for underflows
+            arrA[m * i + j] = (newpix > 0) ?  (uint8_t) newpix : 0;
+        }
+    }
+}
+
+// transpose arrA of dimensions n x m, and put the result in arrB
+static void transpose(uint8_t *arrA, uint8_t *arrB, int n, int m) {
+    for (int i = 0; i < n; i ++) {
+        for (int j = 0; j < m; j ++) {
+            arrB[j * n + i] = arrA[i * m + j];
+        }
+    }
+}
+
+
+
+// find the mean values of pixels belonging to the two components of the checkerboard
+// args:
+//      -meanValsPtr, a pointer to an array of length two to store the two ints that consitute the 
+//      result
+//      -arr, the data array
+// sets the global vars checkerboardOddAverage and checkerboardEvenAverage accordingly
+static void diagAverages(uint8_t *arrA) {
+    // the two groups are defined by whether the sum of the indices is even or odd
+    int evenSum = 0;
+    int oddSum = 0;
+    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+            if ((i + j)%2 == 0) {
+                evenSum += arrA[i * MT9M001_MAX_WIDTH + j];
+            } else {
+                oddSum += arrA[i * MT9M001_MAX_WIDTH + j];
+            }
+        }
+    }
+    checkerboardEvenAverage = (uint8_t) (evenSum/(MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 2));
+    checkerboardOddAverage = (uint8_t) (oddSum/(MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 2));
+}
+
+// subtract out "checkerboard" variation in a frame
+static void subtractDiagBias(uint8_t *arrA) {
+    int spread, excessEven, excessOdd;
+    // if even pixels have higher counts
+    spread = checkerboardEvenAverage - checkerboardOddAverage;
+    excessEven = spread / 2;
+    excessOdd = excessEven - spread;
+    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+            if ((i + j)%2 == 0) {
+                arrA[i * MT9M001_MAX_WIDTH + j] -= excessEven;
+            } else {
+                arrA[i * MT9M001_MAX_WIDTH + j] -= excessOdd;
+            }
+        }
+    }
+}
+static void subConstant(uint8_t *arr, uint8_t tosub, int size) {
+    for (int i = 0; i < size; i ++) {
+        if (tosub > arr[i]) {
+            arr[i] = 0;
+        } else {
+            arr[i] -= tosub;
+        }
+//        arr[i] -= tosub;
+    }
+}
+
+static uint8_t arrayMean(uint8_t *arr, int size) {
+    int sum = 0; 
+    for (int i = 0; i < size; i ++) {
+        sum += arr[i]; 
+    }
+    return (uint8_t) (sum/size);
+}
