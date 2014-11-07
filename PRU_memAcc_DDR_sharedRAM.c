@@ -130,6 +130,20 @@
 * Local Typedef Declarations                                                  *
 ******************************************************************************/
 
+// struct with a single instance that will be used to access the 
+// state of a frame being processed and associated data, including
+// the histograms, dark frame, and frame buffer for isolated events
+typedef struct {
+    uint8_t *darkFrame;
+    uint8_t *isolatedEventsBuffer;
+    uint32_t *sum;
+    uint32_t *pixels;
+    uint32_t *isolated;
+    uint32_t *isolated2DHistogram;
+    uint8_t threshold;
+} FrameState;
+
+FrameState frameState = {NULL, NULL, NULL, NULL, NULL, NULL, 0};
 
 /******************************************************************************
 * Local Function Declarations                                                 *
