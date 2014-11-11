@@ -123,7 +123,7 @@
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
 #define FRAMES_PER_TRANSFER 4 // number of frames at a time for arm to copy
-#define NUMFRAMES 40
+#define NUMFRAMES 400
 
 //#define read_pr0 r1
 #define chunk_size r2
