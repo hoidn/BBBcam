@@ -120,7 +120,7 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define NUMREADS 10  // number of batches of frames
+#define NUMREADS 100  // number of batches of frames
 #define FRAMES_PER_TRANSFER 4
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
@@ -349,14 +349,15 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
         exposure(frame, ddrMem + OFFSET_DDR);
+        diagAverages(frame);
         if (i > 0) { // throw out i = 0, on really necessary if first frames aren't beng flushed
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
                 // update histograms with data from this frame
                 makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
             }
         } else { // i == 0 -> calculate the diagonal components
-            makeHistogramsAndSum(frame, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
-            diagAverages(frame);
+            //makeHistogramsAndSum(frame, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
+           // diagAverages(frame);
         }
     }
 
@@ -528,7 +529,7 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
             left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
             pixels[center] += 1;
             // if all neighbors are below threshold
-            if ((center > threshold) && (top < threshold)  &&(bottom < threshold) && (right < threshold) && (left < threshold)) {
+            if ((center >= threshold) && (top < threshold)  &&(bottom < threshold) && (right < threshold) && (left < threshold)) {
                 isolated[center] += 1;
                 isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
             }
