@@ -114,7 +114,6 @@
 // size in bytes of buffer to share with ARM, divided by 0x10000
 #define DDR_BUF_SIZE 0x40 // buf size: 0x400000
 #define DELAYCOUNT 100000000
-#define DDR_OFFSET 4
 #define CHUNKSIZE 64 // TODO: why 60 and not 64?
 #define NUMCHUNKS 10000000
 #define DDR_INVALID 2
@@ -122,8 +121,10 @@
 #define ARM_PRU_ACK_OFFSET 4
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
-#define FRAMES_PER_TRANSFER 4 // number of frames at a time for arm to copy
-#define NUMFRAMES 400
+#define FRAMES_PER_TRANSFER 1 // number of frames at a time for arm to copy
+
+#define DDR_OFFSET 8 // offset to data region in ddr
+#define NUM_FRAMES_OFFSET 8 // offset to field in local pru mem from which to initialize number_frames
 
 //#define read_pr0 r1
 #define chunk_size r2
@@ -174,6 +175,14 @@
 .macro NOP
 NOP:
         ADD     r0, r0, 0
+.endm
+
+
+.macro INIT_NUM_FRAMES
+// initialize number_frames from the value written to DDR by host
+INIT_NUM_FRAMES:
+        MOV     r1, 0
+        LBBO    number_frames, r1, NUM_FRAMES_OFFSET, 4
 .endm
 
 // ***************************************

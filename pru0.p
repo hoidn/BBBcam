@@ -99,7 +99,7 @@ MEMACCESS_DDR_PRUSHAREDRAM:
 INIT:
         MOV     r0, 0
         MOV     transfer_ready, 0
-        MOV number_frames, NUMFRAMES + 1
+        //MOV number_frames, NUMFRAMES + 1
         MOV frame_counter, 0
         SUB frame_counter, frame_counter, 1 // intentional underflow
 
@@ -121,6 +121,9 @@ INIT:
         MOV var1, DDR_INVALID
         SBBO    var1, ddr_base, 0, 4
 
+        // initialize number_frames from the value written to DDR by host
+        INIT_NUM_FRAMES
+        ADD number_frames, number_frames, 1
         
         // initialize ARM ack to 0
         MOV var1, 0
@@ -149,17 +152,17 @@ WAIT_ARM_ACK_1:
         MOV var1, 0
         SBBO    var1, r1, 0, 4
 
-// flush one frame (it's overexposed)
-FLUSH:
-        //write ACK to PRU mem
-        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        NOP
-        QBBC    FLUSH, r31, 30
+//// flush one frame (it's overexposed)
+//FLUSH:
+//        //write ACK to PRU mem
+//        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        NOP
+//        QBBC    FLUSH, r31, 30
 
         // clear the interrupt from pru1
         LDI     var1, 18
@@ -203,10 +206,10 @@ READ:
 
         // TODO: are these NOPs still necessary? probably not
 WAIT:
-        NOP
-        NOP
-        NOP
-        NOP
+//        NOP
+//        NOP
+//        NOP
+//        NOP
         //check if we received the kill signal
         QBBS    FRAME_END, r31, 30
         //QBNE READ, reads_left, 0
