@@ -80,6 +80,7 @@
 #include <stdint.h>
 #include <pruss_intc_mapping.h>
 #include <assert.h>
+#include <time.h>
 
 // Driver header file
 #include "prussdrv.h"
@@ -103,25 +104,30 @@
 
 // values for PRU communication
 #define CHUNKSIZE 64 // chunk size in bytes for transfers between pru1 and pru0
-// offset in shared pru mem for data transfer ack from arm
+// offset in  pru mem for data transfer ack from arm
 #define ARM_PRU_ACK_OFFSET 4
 #define ACK_PRUMEM_WORD_OFFSET (ARM_PRU_ACK_OFFSET /4)
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
 
+// offset in pru mem to pass number of frames parameter 
+#define NUMFRAMES_PRU_WORD_OFFSET 2
+
 #define DDR_BASEADDR     0x80000000
 
+#define DDR_ACK_OFFSET 0 // uint32_t offset in ddr for ack signal from pru
+#define DDR_NUMFRAMES_OFFSET 1 // uint32_t offset in ddr for ack signal from pru
 #define DDR_OFFSET_0	    0x10000000 //to compensate for mmap bug
 // allow some space for non-pixel data at beginning of shared ddr
-#define DDR_DATA_OFFSET 4 
+#define DDR_DATA_OFFSET 8
 #define OFFSET_DDR (DDR_OFFSET_0 + DDR_DATA_OFFSET) // offset for pixel data in ddr
 #define OFFSET_SHAREDRAM 0		//equivalent with 0x00002000
 
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define NUMREADS 100  // number of batches of frames
-#define FRAMES_PER_TRANSFER 4
+#define NUMREADS 30  // number of batches of frames
+#define FRAMES_PER_TRANSFER 1
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 #define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
@@ -152,22 +158,23 @@ FrameState frameState = {NULL, NULL, NULL, NULL, NULL, NULL, 0};
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize);
 static void sendDDRbase();
 static int pru_allocate_ddr_memory();
-static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr);
+static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int endTimer);
 static void ackPru();
 static void nackPru();
 static char *concatStr(char *str1, char *str2, int bufSize);
 static void usage(char *name);
 //static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
 static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame);
-void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold);
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract);
 void update2DHisto(uint8_t *frame, uint32_t *histo);
 static void transpose(uint8_t *arrA, uint8_t *arrB, int n, int m);
 static void subtractRows(uint8_t *arrA, int n, int m);
-static void subtractDiagBias(uint8_t *arrA);
+static void subtractDiagBias(uint8_t *arrA, int bgSubtract);
 static void diagAverages(uint8_t *arrA);
 static void subConstant(uint8_t *arr, uint8_t subConstant, int size);
 static uint8_t arrayMean(uint8_t *arr, int size);
-static void conditionFrame(uint8_t *src);
+static void conditionFrame(uint8_t *src, int bgSubtract);
+static clock_t start, end;
 
 /******************************************************************************
 * Local Variable Definitions                                                  *
@@ -192,6 +199,8 @@ static uint8_t checkerboardOddAverage = 0;
 // dark level based on provided dark exposure
 static uint8_t darkLevel = 0; 
 uint8_t *tFrame; // array to hold transposed frame
+
+static uint32_t numFrames = NUMREADS;
 
 /******************************************************************************
 * Global Function Definitions                                                 *
@@ -220,7 +229,7 @@ int main (int argc, char **argv)
     // positional arguments (only one of them)
     threshold = strtol(argv[1], &end, 10);
     if (!*end) {
-        printf("threshold value: %d", threshold);
+        printf("threshold value: %d\n", threshold);
     } else {
         usage(argv[0]);
     }
@@ -241,6 +250,10 @@ int main (int argc, char **argv)
                     printf("Can't open file: %s \n", darkName);
                     exit(1);
                 }
+            } else {
+                printf("Invalid option: %s\n", argv[i]);
+                usage(argv[0]);
+                exit(1);
             }
         }
     }
@@ -317,9 +330,15 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     
     // initialize ddrMem and DDR_physical
     pru_allocate_ddr_memory();
-    // Initialize contents of pru memory, which consists of writing the 
-    // corresponding physical address into  PRU mem 
+    // give pru data to initialize its state, which consists of writing the
+    // DDR_physical address into pru mem (NOT shared ddr).
     sendDDRbase();
+    
+    // TODO: why the incosistency? I should pass all parameters either on 
+    // local pru mem or shared pru/arm ddr. Also this "magic number" indexing is
+    // not great
+    prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
+    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
 
 
     prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
@@ -348,26 +367,31 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     // TODO: deal with flushing better
     for (int i = 0; i < NUMREADS; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
-        exposure(frame, ddrMem + OFFSET_DDR);
-        diagAverages(frame);
+        if (i == 0) {
+            // initialize the timer after the readout if this is the "flush" frame
+            exposure(frame, ddrMem + OFFSET_DDR, 1, 0);
+        } else if (i == NUMREADS - 1) {
+            exposure(frame, ddrMem + OFFSET_DDR, 0, 1);
+        } else {
+            exposure(frame, ddrMem + OFFSET_DDR, 0, 0);
+        }
+        if (darkFrame != NULL) {
+            diagAverages(frame);
+        }
+
         if (i > 0) { // throw out i = 0, on really necessary if first frames aren't beng flushed
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
                 // update histograms with data from this frame
-                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
+                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold, 1);
             }
-        } else { // i == 0 -> calculate the diagonal components
-            //makeHistogramsAndSum(frame, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold);
-           // diagAverages(frame);
-        }
+        } 
     }
+    // print the total integration time
+    printf("Integration time (us): %ju\n", (uintmax_t)(clock_t)(end - start));
 
     prussdrv_pru_wait_event (PRU_EVTOUT_1);
     printf("\tINFO: PRU 1 completed transfer.\r\n");
     prussdrv_pru_clear_event (PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
-
-//    prussdrv_pru_wait_event (PRU_EVTOUT_0);
-//    printf("\tINFO: PRU 0 completed transfer.\r\n");
-//    prussdrv_pru_clear_event (PRU_EVTOUT_0, PRU0_ARM_INTERRUPT);
 
 
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
@@ -419,16 +443,23 @@ args:
     frameptr: ptr to array to which to move the data. 
     pruDdrPtr: ptr to pru shared ddr memory
     numMod2: indicates frame position within ddr mem (can be 0 or 1)
+    startTimer: 1 to initialize timer variable start after the readout, 0 otherwise
 */
-static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr) {
+static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int endTimer) {
     // wait for interrupt from pru0 indicating we can start reading
     int datstatus = 2;
     while (datstatus != 1) {
-        datstatus = ((uint32_t *) pruDdrPtr)[-1];
+        //datstatus = ((uint32_t *) pruDdrPtr)[-2];
+        datstatus = ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET];
         delay_ms(10);
     }
+    if (startTimer) {
+        start = clock(); // start the stopwatch
+    } else if (endTimer) {
+        end = clock(); // end the stopwatch
+    }
     // set status invalid for the next call of this function
-    ((uint32_t *) pruDdrPtr)[-1] = 2; 
+    ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET]= 2; 
     memcpy(frameptr, pruDdrPtr, FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
     // acknowledge completion of a read
     ackPru();
@@ -443,14 +474,12 @@ static void sendDDRbase() {
 // acknowledge start of a read by writing a value to ddr of pru1
 static void ackPru() {
     int ack = ARM_PRU_ACK;
-    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &ack, 4);
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &ack, 4);
 }
 
 // signal end of a read by writing a value to pru mem
 static void nackPru() {
     int nack = ARM_PRU_NACK;
-    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &nack, 4);
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, ACK_PRUMEM_WORD_OFFSET, (const unsigned int *) &nack, 4);
 }
 
@@ -508,11 +537,13 @@ static int pru_allocate_ddr_memory()
 
 // functions for creating a histogram of all pixels and of isolated above-thresold pixels, also 
 // adding the frame onto a sum-of-frames array
-void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold) {
+// args: 
+//  bgSubtract: 1 to subtract darkLevel and checkerboard pattern, 0 for the alternative
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract) {
     uint8_t bottom, top, left, right, center;
 
     // subtraction of dark level and systmatic row-to-row and checkerboard variation
-    conditionFrame(src);
+    conditionFrame(src, bgSubtract);
 
     // initialize to 0 the array that will hold isolated events
     for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
@@ -540,19 +571,6 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
 }
 
 
-////subtract arr2 from arr1, handling underflows
-//static void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
-//    for (int i = 0; i < size; i ++) {
-//        //to avoid underflows we set t corrected frame to 0 werever the
-//        //value in the dark frame exceeds it
-////        if (arr2[i] > arr1[i]) {
-////            arr1[i] = 0;
-////        } else {
-////            arr1[i] -= arr2[i];
-////        }
-//        arr1[i] -= arr2[i];
-//    }
-//}
 
 // given pointers to a 2d array of pixel values and a 2d row-by-row histogram
 // of values, update the histogram
@@ -626,19 +644,35 @@ static void diagAverages(uint8_t *arrA) {
     checkerboardOddAverage = (uint8_t) (oddSum/(MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 2));
 }
 
-// subtract out "checkerboard" variation in a frame
-static void subtractDiagBias(uint8_t *arrA) {
+// subtract out "checkerboard" variation in a frame, as well as the dark level
+static void subtractDiagBias(uint8_t *arrA, int bgSubtract) {
+    //printf("performing subtraction \n");
     int spread, excessEven, excessOdd;
+    uint8_t curPix;
     // if even pixels have higher counts
     spread = checkerboardEvenAverage - checkerboardOddAverage;
+
     excessEven = spread / 2;
     excessOdd = excessEven - spread;
+    if (bgSubtract) {
+        excessEven += darkLevel;
+        excessOdd += darkLevel;
+    }
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
         for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+            curPix = arrA[i * MT9M001_MAX_WIDTH + j];
             if ((i + j)%2 == 0) {
-                arrA[i * MT9M001_MAX_WIDTH + j] -= excessEven;
+                if (excessEven < curPix) {
+                    arrA[i * MT9M001_MAX_WIDTH + j] -= excessEven;
+                } else {
+                    arrA[i * MT9M001_MAX_WIDTH + j] = 0;
+                }
             } else {
-                arrA[i * MT9M001_MAX_WIDTH + j] -= excessOdd;
+                if (excessOdd < curPix) {
+                    arrA[i * MT9M001_MAX_WIDTH + j] -= excessOdd;
+                } else {
+                    arrA[i * MT9M001_MAX_WIDTH + j] = 0;
+                }
             }
         }
     }
@@ -667,7 +701,7 @@ static uint8_t arrayMean(uint8_t *arr, int size) {
 // condition a single frame by doing subtraction of row-to-row and diagonal 
 // variation, and subtraction from each element of global var darkLevel
 // args: src, a pointer to data of a single frame
-static void conditionFrame(uint8_t *src) {
+static void conditionFrame(uint8_t *src, int bgSubtract) {
     // subtract row-to-row variation
     subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
     // transpose and move to tFrame
@@ -679,13 +713,16 @@ static void conditionFrame(uint8_t *src) {
     // subtract "checkerboard" variation"
     // TODO: any good reason to pass these as parameters? 
     // check that the checkerboard parameters have been initialized
-    printf("%d, %d\n", checkerboardEvenAverage, checkerboardOddAverage);
-    subtractDiagBias(src);
+    //printf("%d, %d\n", checkerboardEvenAverage, checkerboardOddAverage);
+    // correct for dark level and checkerboard pattern only if dark frame was provided
+    if (bgSubtract) {
+        subtractDiagBias(src, bgSubtract);
+    }
 
     // dark level subtraction
     //assert(darkLevel != 0); // check dark level is initialized
-    printf("subtracting\n");
-    printf("first element before: %d\n", src[500000]);
-    subConstant(src, darkLevel, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
-    printf("first element after: %d\n", src[500000]);
+//    printf("subtracting\n");
+//    printf("first element before: %d\n", src[500000]);
+//    subConstant(src, darkLevel, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+//    printf("first element after: %d\n", src[500000]);
 }

@@ -86,23 +86,8 @@ START:
 
 
 
-//    //load GPI data
-//    .macro GPIREAD
-//    GPIREAD:
-//            MOV     gpi_read, 0xdeadbeef
-//    .endm
 
 
-//.macro  onepix
-//.mparam dst
-//    CLR  SYSCLK // falling clock edge
-//    NOP  // wait 10 ns for signal to propagate
-//    NOP
-//    MOV dst, PIX10_2 // move pix[8:0] into destination reg
-//    SET SYSCLK // rising edge
-//    NOP
-//    NOP
-//.endm
 
 
 .macro  onepix
@@ -118,18 +103,6 @@ START:
     NOP
 .endm
 
-//.macro  onepix
-//.mparam dst
-//    CLR  SYSCLK // falling clock edge
-//    ADD pixel_counter, pixel_counter, 1
-//    MOV dst.w0, pixel_counter.w0
-//    SET SYSCLK // rising edge
-//    MOV dst.w2, pixel_counter.w2
-//    NOP
-//.endm
-        
-    
-
     
     
 INIT:
@@ -144,8 +117,13 @@ INIT:
         MOV r0, 0
         MOV     transfer_ready, 1
         // TODO: inconsistency with number_frames between pru0 and pru1
-        MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
+        //FOR FLUSHING OPEERATION MODE
+        //MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
         //MOV number_frames, NUMFRAMES 
+        
+        // initialize number_frames from the value written to DDR by host
+        INIT_NUM_FRAMES
+
         MOV frame_counter, 0
         //MOV pixel_counter, 0
 
