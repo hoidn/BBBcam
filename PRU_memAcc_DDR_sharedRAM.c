@@ -126,7 +126,7 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
-#define NUMREADS 30  // number of batches of frames
+#define NUMREADS 40  // default number of batches of frames
 #define FRAMES_PER_TRANSFER 1
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
@@ -163,7 +163,7 @@ static void ackPru();
 static void nackPru();
 static char *concatStr(char *str1, char *str2, int bufSize);
 static void usage(char *name);
-//static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
+static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
 static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame);
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract);
 void update2DHisto(uint8_t *frame, uint32_t *histo);
@@ -173,7 +173,7 @@ static void subtractDiagBias(uint8_t *arrA, int bgSubtract);
 static void diagAverages(uint8_t *arrA);
 static void subConstant(uint8_t *arr, uint8_t subConstant, int size);
 static uint8_t arrayMean(uint8_t *arr, int size);
-static void conditionFrame(uint8_t *src, int bgSubtract);
+static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract);
 static clock_t start, end;
 
 /******************************************************************************
@@ -221,7 +221,7 @@ int main (int argc, char **argv)
 
 
     // handle command line arguments
-    if (argc < 2 || argc > 6) {
+    if (argc < 2 || argc > 8) {
         usage(argv[0]);
         return -1;
     }
@@ -243,6 +243,14 @@ int main (int argc, char **argv)
             if (strcmp(argv[i], "-o") == 0) {
                 i ++;
                 fname = argv[i];
+            } else if (strcmp(argv[i], "-n") == 0) {
+                i ++; 
+                errno = 0;
+                numFrames = strtol(argv[i], &end, 10);
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
             } else if (strcmp(argv[i], "-d") == 0) {
                 i ++; 
                 darkName = argv[i];
@@ -365,19 +373,19 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     }
 
     // TODO: deal with flushing better
-    for (int i = 0; i < NUMREADS; i ++) {
+    for (int i = 0; i < numFrames; i ++) {
         // capture a frame and place it in the malloc'd frame buffer
         if (i == 0) {
             // initialize the timer after the readout if this is the "flush" frame
             exposure(frame, ddrMem + OFFSET_DDR, 1, 0);
-        } else if (i == NUMREADS - 1) {
+        } else if (i == numFrames - 1) {
             exposure(frame, ddrMem + OFFSET_DDR, 0, 1);
         } else {
             exposure(frame, ddrMem + OFFSET_DDR, 0, 0);
         }
-        if (darkFrame != NULL) {
-            diagAverages(frame);
-        }
+//        if (darkFrame != NULL) {
+//            diagAverages(frame);
+//        }
 
         if (i > 0) { // throw out i = 0, on really necessary if first frames aren't beng flushed
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
@@ -396,7 +404,7 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
 
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
         for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/((NUMREADS - 1) * FRAMES_PER_TRANSFER));
+            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/((numFrames - 1) * FRAMES_PER_TRANSFER));
         }
     }
 
@@ -433,7 +441,7 @@ static char *concatStr(char *str1, char *str2, int bufSize) {
 
 // usage statement
 static void usage(char *name) {
-    printf("usage: %s threshold -o filename -d [darkfilename]\n", name);
+    printf("usage: %s threshold -o filename [-d darkfilename] [-n number_of_exposures]\n", name);
 }
 
 /* 
@@ -543,7 +551,7 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
     uint8_t bottom, top, left, right, center;
 
     // subtraction of dark level and systmatic row-to-row and checkerboard variation
-    conditionFrame(src, bgSubtract);
+    conditionFrame(src, darkFrame, bgSubtract);
 
     // initialize to 0 the array that will hold isolated events
     for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
@@ -701,7 +709,7 @@ static uint8_t arrayMean(uint8_t *arr, int size) {
 // condition a single frame by doing subtraction of row-to-row and diagonal 
 // variation, and subtraction from each element of global var darkLevel
 // args: src, a pointer to data of a single frame
-static void conditionFrame(uint8_t *src, int bgSubtract) {
+static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
     // subtract row-to-row variation
     subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
     // transpose and move to tFrame
@@ -710,13 +718,18 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
     subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
     transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
 
-    // subtract "checkerboard" variation"
-    // TODO: any good reason to pass these as parameters? 
-    // check that the checkerboard parameters have been initialized
-    //printf("%d, %d\n", checkerboardEvenAverage, checkerboardOddAverage);
-    // correct for dark level and checkerboard pattern only if dark frame was provided
-    if (bgSubtract) {
-        subtractDiagBias(src, bgSubtract);
+//    // subtract "checkerboard" variation"
+//    // TODO: any good reason to pass these as parameters? 
+//    // check that the checkerboard parameters have been initialized
+//    //printf("%d, %d\n", checkerboardEvenAverage, checkerboardOddAverage);
+//    // correct for dark level and checkerboard pattern only if dark frame was provided
+//    if (bgSubtract) {
+//        subtractDiagBias(src, bgSubtract);
+//    }
+
+    // TODO: WHY IS THIS OFFSET NEEDED?
+    if (dark != NULL) {
+        subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
     }
 
     // dark level subtraction
@@ -725,4 +738,20 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
 //    printf("first element before: %d\n", src[500000]);
 //    subConstant(src, darkLevel, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
 //    printf("first element after: %d\n", src[500000]);
+}
+
+//subtract arr2 from arr1
+void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
+    for (int i = 0; i < size; i ++) {
+
+//        //to avoid underflows we set t corrected frame to 0 werever the
+//        //value in the dark frame exceeds it
+//        if (arr2[i] > arr1[i]) {
+//            arr1[i] = 0;
+//        } else {
+//            arr1[i] -= arr2[i];
+//        }
+
+        arr1[i] -= arr2[i];
+    }
 }
