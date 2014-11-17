@@ -562,15 +562,19 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
             sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
             center = src[i * MT9M001_MAX_WIDTH + j];
-            top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
-            bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
-            right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
-            left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
             pixels[center] += 1;
             // if all neighbors are below threshold
-            if ((center >= threshold) && (top < threshold)  &&(bottom < threshold) && (right < threshold) && (left < threshold)) {
-                isolated[center] += 1;
-                isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
+            // TODO: don't evaluate top, bottom, left, or right until center >= threshold has been 
+            // satisfied
+            if (center >= threshold) {
+                top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
+                bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
+                right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
+                left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
+                if ((top < threshold) && (bottom < threshold) && (right < threshold) && (left < threshold)) {
+                    isolated[center] += 1;
+                    isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
+                }
             }
         }
     }
