@@ -1,0 +1,119 @@
+commit aa0e7acd7b5d1b6827a6b9cb911528914120f8b6
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Mon Nov 17 23:24:18 2014 +0000
+
+    going to implement real-time cluster analysis
+
+commit 0c6f4d278e77b77eea62c216771d8a0762ca49f5
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Nov 14 00:03:50 2014 +0000
+
+    removed diagnoal-wise corection and reinstated proper dark frame subtraction, with a 1 pixel shift in the dark frame that resolves the previous issue
+
+commit 71ccc70d42e3f2ed330c0bc3a541b1e42834d23c
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Wed Nov 12 23:41:11 2014 +0000
+
+    number of frames is now passed as a parameter from host to local ddr of both prus. only perfunctory check has been done to see that everything still works.
+
+commit bee27453745b428ddd25b3a2cc431c1a878f16fb
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Tue Nov 11 22:06:12 2014 +0000
+
+    working in deadtime mode, return HERE if subsequent changes are problematic
+
+commit d0793add39238974810b3cdc38b8129d0051bd04
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Nov 7 22:14:43 2014 +0000
+
+    going to get rid of flushing again
+
+commit a5a0a09d3e4c63e8f039747e05de4bd6d678d9c2
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Nov 7 19:59:42 2014 +0000
+
+    some ousekeeping
+
+commit f6dacd7dca404f590d9a73d0d93ab7862f44abf3
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Nov 7 19:26:18 2014 +0000
+
+    implemented subtraction of row-by-row variation and of the checkerboard background pattern. The former addition has a big runtime penalty, so I need to think about whether it's really necessary. The dark frame subtraction is now only a subtraction of the average level, rather than a pixel-by pixel subtraction, since the structure in the dark frame is pretty much wholly described by this checkerboard pattern. If row variation correction can really be dispensed with, this opens the possibility of doing on-the-fly accumulation of the histogram on the pru, which would allow a big increase in framerate
+
+commit f070a969b63ce1f1d85af16266545b842d4b2cb5
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Nov 6 20:16:08 2014 +0000
+
+    fixed a few bugs that cropped up in this multiple-frame-per-batch mode
+
+commit 6fc9d930b5a04b3cb4eee829a058b96d8ef88910
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Nov 6 19:59:32 2014 +0000
+
+    returned to taking batches of 4 frames, with flushing before each batch so that the frames are all of the same intensity
+
+commit 53aa1b308cd27741410ed9ca0aa6cbc2fa4421b2
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Wed Nov 5 21:23:29 2014 +0000
+
+    changed chain to max
+
+commit 07b77861a2f374cabc5635da37b1dc6317553ec5
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Oct 31 21:18:23 2014 +0000
+
+    added some todos
+
+commit 743e95d2a4aad887d4d9c1b8610592de38b1ced1
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Oct 31 20:52:07 2014 +0000
+
+    now generates a row-by-row histogram of isolated event values with a view towards using this sensor for x-ray spectroscopy in a point-to-line focusing geometry
+
+commit becaa04f04292514e2cb2570bbbad12f0eef6b02
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Fri Oct 31 01:02:41 2014 +0000
+
+    added handling of command-line parameters for threshold level, dark frame subtraction file, and output file name prefix. perfunctory testing suggests dark frame subtraction works, need to do more testing
+
+commit 828604b9a635d9faad6ddf6b7ea570764e87e106
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 22:59:03 2014 +0000
+
+    minor cleanup and reorganization
+
+commit 21b0e178518f0e1e13ed57ec8f56dd6ad4b0214a
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 22:38:36 2014 +0000
+
+    reduced batch sze to 1 and eliminated flushing, to get rid of dead time without making the first frame in each batch overexposed compared to the others
+
+commit 737520f2bd6014749befd11aef4263f2f3ecbdaf
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 17:59:51 2014 +0000
+
+    in case anything canged
+
+commit de74d8815fe069db9a35a13d84c56ca2c39bbf9d
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 02:24:07 2014 +0000
+
+    started implementing real-time histogram
+
+commit 5dedce672ac07fd9cf9271f27157c38c9c7acd4d
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 00:49:23 2014 +0000
+
+    fixed uneven exposure issue (at expense of lower frame rate)
+
+commit 14ec6e1b7db33e46cfc104881460f67139ac4cd0
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Thu Oct 30 00:01:35 2014 +0000
+
+    we now transfer data from the pru/arm shared buffer four frames at a time. known issues: this causes the first frame in each batch of four to be overexposed, due to the camera's idle time while the arm is copy four previous frames
+
+commit aa511004f5671dbaabc938dc47df0ee66c65bcd4
+Author: Demo User <debian@beaglebone.(none)>
+Date:   Wed Oct 29 19:34:36 2014 +0000
+
+    initial commit after previous repository was corrupted

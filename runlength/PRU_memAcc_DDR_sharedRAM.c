@@ -714,13 +714,13 @@ static uint8_t arrayMean(uint8_t *arr, int size) {
 // variation, and subtraction from each element of global var darkLevel
 // args: src, a pointer to data of a single frame
 static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
-    // subtract row-to-row variation
-    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
-    // transpose and move to tFrame
-    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
-    // do the same on the transposed frame
-    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
-    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+//    // subtract row-to-row variation
+//    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    // transpose and move to tFrame
+//    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    // do the same on the transposed frame
+//    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+//    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
 
 //    // subtract "checkerboard" variation"
 //    // TODO: any good reason to pass these as parameters? 
@@ -748,18 +748,18 @@ static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
 void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
     for (int i = 0; i < size; i ++) {
 
-//        //to avoid underflows we set t corrected frame to 0 werever the
-//        //value in the dark frame exceeds it
-//        if (arr2[i] > arr1[i]) {
-//            arr1[i] = 0;
-//        } else {
-//            arr1[i] -= arr2[i];
-//        }
+        //to avoid underflows we set t corrected frame to 0 werever the
+        //value in the dark frame exceeds it
+        if (arr2[i] > arr1[i]) {
+            arr1[i] = 0;
+        } else {
+            arr1[i] -= arr2[i];
+        }
 
-        arr1[i] -= arr2[i];
+//        arr1[i] -= arr2[i];
     }
 }
 
-// initialize global data for the cluster search 
-void initClusterSearch () {
+//// initialize global data for the cluster search 
+//void initClusterSearch () {
     

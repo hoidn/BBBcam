@@ -74,6 +74,16 @@
 
 //macros
 
+.macro end_run
+    LSL runlen_counter, runlen_counter, 8 // move count to three most significant bytes
+    ADD runlen_counter, runlen_counter, 255 // set least significant byte to 255 to 
+    SBBO    runlen_counter, encoding_dst, encoded_size, 4 // write the run to pru mem
+    ADD encoded_size, encoded_size, 4 // increment size of encoded data
+    // reset runlength status and counter
+    MOV runlen_status, 0
+    MOV runlen_counter, 0
+.endm
+
 .macro encode
 .mparam srcreg
     QBNE    P0_0, srcreg.b0, 255
@@ -100,18 +110,12 @@ NOT_RUN_0:
     QBEQ    WRITE_BYTE_0, runlen_status, 0
 // we were in a run, so write run to pru mem 
 WRITE_RUN_0:
-    LSL runlen_counter, runlen_counter, 24 // move count to three most significant bytes
-    ADD runlen_counter, runlen_counter, 255 // set least significant byte to 255 to 
-    SBBO    runlen_counter, encoding_dst, 0, 4 // the run to pru mem
-    ADD encoding_dst, encoding_dst, 4 // increment offset into pru mem
-    // reset runlength status and counter
-    MOV runlen_status, 0
-    MOV runlen_counter, 0
+    end_run
 // write byte of raw data to pru mem
 WRITE_BYTE_0:
     // copy the entire byte
-    SBBO    srcreg, encoding_dst, 0, 4 // copy register to offset encoding_src in pru mem
-    ADD encoding_dst, encoding_dst, 4 // increment offset into pru mem
+    SBBO    srcreg, encoding_dst, encoded_size, 4 // copy register to offset encoding_src in pru mem
+    ADD encoded_size, encoded_size, 4 // increment size of encoded data
     QBA END_ENCODE
 ENCODE_ZERO_0: // all pixels are below threshold
     QBEQ    ADD_TO_RUN_0, runlen_status, 1 // we're already in a run
@@ -146,6 +150,12 @@ MEMACCESS_DDR_PRUSHAREDRAM:
 
 
 INIT:
+        // initialize runlength encoding
+        MOV  encoding_dst, ENCODING_PRUMEM_BASE 
+        MOV  encoded_size, 0 
+        MOV runlen_status, 0
+        MOV runlen_counter, 0
+
         MOV     r0, 0
         MOV     transfer_ready, 0
         //MOV number_frames, NUMFRAMES + 1
@@ -248,6 +258,7 @@ READ:
 //      runlen_counter, to count number of pixels in current run
 //          (or, move that functionality to pru1)
 //      in INIT: initialize all these registers
+
     // encode it and copy it to DDR
     encode r9
     encode r10
@@ -267,18 +278,33 @@ READ:
     encode r24
 
 
-    MOV encoding_dst, ENCODING_PRUMEM_BASE // reset the pointer into local pru mem
-    LBBO    r9, encoding_dst, 0, CHUNKSIZE // copy encoded data back into registers
-    SBBO    r9, ddr_pointer, DDR_OFFSET, CHUNKSIZE // and transfer it to DDR
+    // copy encoded_size bytes of encoded data back into registers
+
+
+//MOV encoded_size, CHUNKSIZE
+
+    // if we're still in a run, wrap it up 
+    // TODO: could be made more efficient by only doing this check at the end 
+    // of the frame
+    QBEQ    NOT_IN_RUN, runlen_status, 0
+    end_run
+
+NOT_IN_RUN:
+    LBBO    r9, encoding_dst, 0, b0 
+    SBBO    r9, ddr_pointer, DDR_OFFSET, b0 // and transfer it to DDR
+
+    // increment DDR counter
+    ADD ddr_counter, ddr_counter, encoded_size
+
+    // increment DDR memory pointer
+    ADD ddr_pointer, ddr_pointer, encoded_size
+
+    // reset encoded_size
+    MOV encoded_size, 0
         
-        //write ACK to PRU mem
-        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+    //write ACK to PRU mem
+    SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
 
-        // increment DDR counter
-        ADD ddr_counter, ddr_counter, CHUNKSIZE
-
-        // increment DDR memory pointer
-        ADD ddr_pointer, ddr_pointer, CHUNKSIZE
 
 
         // TODO: are these NOPs still necessary? probably not
