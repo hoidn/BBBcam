@@ -131,6 +131,7 @@
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 #define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
+#define HISTOGRAM_LENGTH MT9M001_MAX_HEIGHT // 1024 or 1280 depending on orientation
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -304,7 +305,7 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
     frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
     frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
-    isolated2DHistogram = calloc(MAXVALUE * MT9M001_MAX_HEIGHT, sizeof(uint32_t));
+    isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
     // frame to hold transposed arrays
     tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
     // TODO: modify makeHistogramsAndSum
@@ -413,9 +414,9 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
     exposureWrite32(concatStr(prefix, "singles.dat", bufSize), (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32(concatStr(prefix, "pixels.dat", bufSize), (uint32_t *) pixelsHisto, MAXVALUE);
-    //exposureWrite32("sum.dat",  frameSum, FILESIZE_BYTES);
+    exposureWrite32(concatStr(prefix, "sum.dat", bufSize),  frameSum, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
     exposureWrite32(concatStr(prefix, "average.dat", bufSize), (uint32_t *) frameAvg, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT/4);
-    exposureWrite32(concatStr(prefix, "2dhisto.dat", bufSize), (uint32_t *) isolated2DHistogram, MAXVALUE * MT9M001_MAX_HEIGHT);
+    exposureWrite32(concatStr(prefix, "2dhisto.dat", bufSize), (uint32_t *) isolated2DHistogram, MAXVALUE * HISTOGRAM_LENGTH);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -598,6 +599,21 @@ void update2DHisto(uint8_t *frame, uint32_t *histo) {
     }
 }
 
+
+//// given pointers to a 2d array of pixel values and a 2d row-by-row histogram
+//// of values, update the histogram
+//void update2DHisto(uint8_t *frame, uint32_t *histo) {
+//    uint8_t value;
+//    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+//        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+//            value = frame[i * MT9M001_MAX_WIDTH + j];
+//            if (value > 0) {
+//                histo[j * MAXVALUE + value] += 1;
+//            }
+//        }
+//    }
+//}
+
 //subtract out row-to-row variation of the mean pixel value for an n x m array
 static void subtractRows(uint8_t *arrA, int n, int m) {
     int rowVals[n]; //counts in each row
@@ -714,13 +730,13 @@ static uint8_t arrayMean(uint8_t *arr, int size) {
 // variation, and subtraction from each element of global var darkLevel
 // args: src, a pointer to data of a single frame
 static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
-    // subtract row-to-row variation
-    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
-    // transpose and move to tFrame
-    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
-    // do the same on the transposed frame
-    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
-    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+//    // subtract row-to-row variation
+//    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    // transpose and move to tFrame
+//    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    // do the same on the transposed frame
+//    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+//    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
 
 //    // subtract "checkerboard" variation"
 //    // TODO: any good reason to pass these as parameters? 
@@ -748,14 +764,14 @@ static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
 void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
     for (int i = 0; i < size; i ++) {
 
-//        //to avoid underflows we set t corrected frame to 0 werever the
-//        //value in the dark frame exceeds it
-//        if (arr2[i] > arr1[i]) {
-//            arr1[i] = 0;
-//        } else {
-//            arr1[i] -= arr2[i];
-//        }
+        //to avoid underflows we set t corrected frame to 0 werever the
+        //value in the dark frame exceeds it
+        if (arr2[i] > arr1[i]) {
+            arr1[i] = 0;
+        } else {
+            arr1[i] -= arr2[i];
+        }
 
-        arr1[i] -= arr2[i];
+//        arr1[i] -= arr2[i];
     }
 }
