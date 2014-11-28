@@ -74,6 +74,7 @@
 
 //macros
 
+
 .macro end_run
     LSL runlen_counter, runlen_counter, 8 // move count to three most significant bytes
     ADD runlen_counter, runlen_counter, 255 // set least significant byte to 255 to 
@@ -84,6 +85,7 @@
     MOV runlen_counter, 0
 .endm
 
+// given a reg between r9 and r24, encode the contents
 .macro encode
 .mparam srcreg
     QBNE    P0_0, srcreg.b0, 255
@@ -155,6 +157,8 @@ INIT:
         MOV  encoded_size, 0 
         MOV runlen_status, 0
         MOV runlen_counter, 0
+        MOV diag_counter, 0
+        MOV diag_state, 0
 
         MOV     r0, 0
         MOV     transfer_ready, 0
@@ -231,12 +235,9 @@ RESETDDR_1:
         // set DDR pointer to ddr base address
         SBCO    ddr_base, CONST_PRUSHAREDRAM, CHUNKSIZE + 8, 4
         LBCO    ddr_pointer, CONST_PRUSHAREDRAM, CHUNKSIZE + 8, 4
-        // reset DDR counter to 0
-        MOV ddr_counter, 0
     
 
 READ:
-
         // TODO: change label of this register
         LBCO transfer_ready, CONST_PRUSHAREDRAM, 4, 4 // == 1 if there's a fresh chunk to transfer
 
@@ -249,7 +250,105 @@ READ:
         SBCO    transfer_ready, CONST_PRUSHAREDRAM, 4, 4
         // load data
         LBCO    data_start, CONST_PRUSHAREDRAM, 8, CHUNKSIZE
-        
+
+        // figure out where we are w/respect to the checkerboard pattern, i.e.
+        // which row of the readout?
+        QBGT    CHECK_ROW, diag_counter, 40
+        // reset diag_counter
+        MOV     diag_counter, 0
+   CHECK_ROW: 
+        QBLT    ODD_ROW, diag_counter, 19
+    EVEN_ROW:
+        MOV diag_state, 0
+        QBA INCREMENT_DIAG_COUNTER
+    ODD_ROW:
+        MOV diag_state, 1
+    INCREMENT_DIAG_COUNTER:
+        ADD diag_counter, diag_counter, 1
+
+// correct the data for checkerboard bias
+QBEQ    DIAG_STATE_1, diag_state, 1
+DIAG_STATE_0:
+    // in an even row
+    SUB r9.b0, r9.b0, DIAG_CORRECTION
+    SUB r9.b2, r9.b2, DIAG_CORRECTION
+    SUB r10.b0, r10.b0, DIAG_CORRECTION
+    SUB r10.b2, r10.b2, DIAG_CORRECTION
+    SUB r11.b0, r11.b0, DIAG_CORRECTION
+    SUB r11.b2, r11.b2, DIAG_CORRECTION
+    SUB r12.b0, r12.b0, DIAG_CORRECTION
+    SUB r12.b2, r12.b2, DIAG_CORRECTION
+    SUB r13.b0, r13.b0, DIAG_CORRECTION
+    SUB r13.b2, r13.b2, DIAG_CORRECTION
+    SUB r14.b0, r14.b0, DIAG_CORRECTION
+    SUB r14.b2, r14.b2, DIAG_CORRECTION
+    SUB r15.b0, r15.b0, DIAG_CORRECTION
+    SUB r15.b2, r15.b2, DIAG_CORRECTION
+    SUB r16.b0, r16.b0, DIAG_CORRECTION
+    SUB r16.b2, r16.b2, DIAG_CORRECTION
+    SUB r17.b0, r17.b0, DIAG_CORRECTION
+    SUB r17.b2, r17.b2, DIAG_CORRECTION
+    SUB r18.b0, r18.b0, DIAG_CORRECTION
+    SUB r18.b2, r18.b2, DIAG_CORRECTION
+    SUB r19.b0, r19.b0, DIAG_CORRECTION
+    SUB r19.b2, r19.b2, DIAG_CORRECTION
+    SUB r20.b0, r20.b0, DIAG_CORRECTION
+    SUB r20.b2, r20.b2, DIAG_CORRECTION
+    SUB r21.b0, r21.b0, DIAG_CORRECTION
+    SUB r21.b2, r21.b2, DIAG_CORRECTION
+    SUB r22.b0, r22.b0, DIAG_CORRECTION
+    SUB r22.b2, r22.b2, DIAG_CORRECTION
+    SUB r23.b0, r23.b0, DIAG_CORRECTION
+    SUB r23.b2, r23.b2, DIAG_CORRECTION
+    SUB r24.b0, r24.b0, DIAG_CORRECTION
+    SUB r24.b2, r24.b2, DIAG_CORRECTION
+
+    QBA ENCODE
+
+RESETDDR_JMP:
+    QBA RESETDDR
+
+READ_JMP:
+    QBA READ
+
+DIAG_STATE_1:
+    // in an odd row
+
+    SUB r9.b1, r9.b1, DIAG_CORRECTION
+    SUB r9.b3, r9.b3, DIAG_CORRECTION
+    SUB r10.b1, r10.b1, DIAG_CORRECTION
+    SUB r10.b3, r10.b3, DIAG_CORRECTION
+    SUB r11.b1, r11.b1, DIAG_CORRECTION
+    SUB r11.b3, r11.b3, DIAG_CORRECTION
+    SUB r12.b1, r12.b1, DIAG_CORRECTION
+    SUB r12.b3, r12.b3, DIAG_CORRECTION
+    SUB r13.b1, r13.b1, DIAG_CORRECTION
+    SUB r13.b3, r13.b3, DIAG_CORRECTION
+    SUB r14.b1, r14.b1, DIAG_CORRECTION
+    SUB r14.b3, r14.b3, DIAG_CORRECTION
+    SUB r15.b1, r15.b1, DIAG_CORRECTION
+    SUB r15.b3, r15.b3, DIAG_CORRECTION
+    SUB r16.b1, r16.b1, DIAG_CORRECTION
+    SUB r16.b3, r16.b3, DIAG_CORRECTION
+    SUB r17.b1, r17.b1, DIAG_CORRECTION
+    SUB r17.b3, r17.b3, DIAG_CORRECTION
+    SUB r18.b1, r18.b1, DIAG_CORRECTION
+    SUB r18.b3, r18.b3, DIAG_CORRECTION
+    SUB r19.b1, r19.b1, DIAG_CORRECTION
+    SUB r19.b3, r19.b3, DIAG_CORRECTION
+    SUB r20.b1, r20.b1, DIAG_CORRECTION
+    SUB r20.b3, r20.b3, DIAG_CORRECTION
+    SUB r21.b1, r21.b1, DIAG_CORRECTION
+    SUB r21.b3, r21.b3, DIAG_CORRECTION
+    SUB r22.b1, r22.b1, DIAG_CORRECTION
+    SUB r22.b3, r22.b3, DIAG_CORRECTION
+    SUB r23.b1, r23.b1, DIAG_CORRECTION
+    SUB r23.b3, r23.b3, DIAG_CORRECTION
+    SUB r24.b1, r24.b1, DIAG_CORRECTION
+    SUB r24.b3, r24.b3, DIAG_CORRECTION
+
+
+
 // run-length encoding implementation
 // the following is needed:
 //      a convention on the start address in local pru mem for the encoded data buffer
@@ -259,6 +358,7 @@ READ:
 //          (or, move that functionality to pru1)
 //      in INIT: initialize all these registers
 
+ENCODE:
     // encode it and copy it to DDR
     encode r9
     encode r10
@@ -292,9 +392,6 @@ READ:
 NOT_IN_RUN:
     LBBO    r9, encoding_dst, 0, b0 
     SBBO    r9, ddr_pointer, DDR_OFFSET, b0 // and transfer it to DDR
-
-    // increment DDR counter
-    ADD ddr_counter, ddr_counter, encoded_size
 
     // increment DDR memory pointer
     ADD ddr_pointer, ddr_pointer, encoded_size
@@ -335,7 +432,7 @@ FRAME_END:
     AND   var1, var1, (FRAMES_PER_TRANSFER - 1)
 
     // reset ddr pointer every 1, 2, or 4 frames
-    QBEQ  RESETDDR, var1, (FRAMES_PER_TRANSFER - 1)
+    QBEQ  RESETDDR_JMP, var1, (FRAMES_PER_TRANSFER - 1)
 
 //    // otherwise write to first byte of ddr to indicate completion of an even frame
 //    MOV var1, 0
@@ -352,7 +449,7 @@ FRAME_END:
 //    SBBO    var1, r1, 0, 4
 
     // finally resume readout
-    QBA   READ 
+    QBA   READ_JMP
 
 
 
