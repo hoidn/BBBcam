@@ -121,14 +121,16 @@
 #define ARM_PRU_ACK_OFFSET 4
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
+
 #define FRAMES_PER_TRANSFER 1 // number of frames at a time for arm to copy
-#define THRESHOLD 0
+#define THRESHOLD 26
 #define DIAG_CORRECTION 8
 
 #define DDR_OFFSET 8 // offset to data region in ddr
 #define NUM_FRAMES_OFFSET 8 // offset to field in local pru mem from which to initialize number_frames
 // byte location in pru data ram location for encoded data. Initialize encoding_dst to this
 #define ENCODING_PRUMEM_BASE 4 
+#define DDR_READSIZE_OFFSET 4
 
 
 //free regs:  

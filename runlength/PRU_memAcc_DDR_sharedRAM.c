@@ -116,6 +116,7 @@
 #define DDR_BASEADDR     0x80000000
 
 #define DDR_ACK_OFFSET 0 // uint32_t offset in ddr for ack signal from pru
+#define DDR_READSIZE_OFFSET 1 // uint32_t offset in ddr to which pru0 writes the value of its local ddr_pointer reg
 #define DDR_NUMFRAMES_OFFSET 1 // uint32_t offset in ddr for ack signal from pru
 #define DDR_OFFSET_0	    0x10000000 //to compensate for mmap bug
 // allow some space for non-pixel data at beginning of shared ddr
@@ -455,7 +456,9 @@ args:
 */
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int endTimer) {
     // wait for interrupt from pru0 indicating we can start reading
+    uint32_t datSizeBytes  = FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH;
     int datstatus = 2;
+
     while (datstatus != 1) {
         //datstatus = ((uint32_t *) pruDdrPtr)[-2];
         datstatus = ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET];
@@ -468,7 +471,13 @@ static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int 
     }
     // set status invalid for the next call of this function
     ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET]= 2; 
-    memcpy(frameptr, pruDdrPtr, FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    // get number of bytes to copy (4 bytes for terminating sequence)
+    datSizeBytes = ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_READSIZE_OFFSET] - *((uint32_t *) DDR_physical) + 4;
+    printf("data size: %d\n", datSizeBytes);
+    memcpy(frameptr, pruDdrPtr, datSizeBytes);
+//    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4; i ++) {
+//        ((uint32_t *) frameptr)[i] = ((uint32_t *) pruDdrPtr)[i];
+//    }
     // acknowledge completion of a read
     ackPru();
 }
