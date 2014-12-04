@@ -416,6 +416,12 @@ WAIT:
 
 FRAME_END:
 
+    // write stop signal to ddr
+    MOV var1, 0
+    SBBO    var1, ddr_pointer, DDR_OFFSET, 4 // and transfer it to DDR
+    // write value of ddr_pointer to ddr
+    SBBO    ddr_pointer, ddr_base, DDR_READSIZE_OFFSET, 4
+
     // clear the interrupt from pru1
     LDI     var1, 18
     SBCO    var1, C0, 0x24, 4 
