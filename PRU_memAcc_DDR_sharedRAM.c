@@ -561,13 +561,13 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
 
     for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
-            sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
             center = src[i * MT9M001_MAX_WIDTH + j];
             pixels[center] += 1;
             // if all neighbors are below threshold
             // TODO: don't evaluate top, bottom, left, or right until center >= threshold has been 
             // satisfied
             if (center >= threshold) {
+                sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
