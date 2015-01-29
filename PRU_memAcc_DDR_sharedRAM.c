@@ -116,6 +116,7 @@
 #define DDR_BASEADDR     0x80000000
 
 #define DDR_ACK_OFFSET 0 // uint32_t offset in ddr for ack signal from pru
+#define DDR_READSIZE_OFFSET 1 // uint32_t offset in ddr to which pru0 writes the value of its local ddr_pointer reg
 #define DDR_NUMFRAMES_OFFSET 1 // uint32_t offset in ddr for ack signal from pru
 #define DDR_OFFSET_0	    0x10000000 //to compensate for mmap bug
 // allow some space for non-pixel data at beginning of shared ddr
@@ -131,7 +132,6 @@
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 #define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
-#define HISTOGRAM_LENGTH MT9M001_MAX_HEIGHT // 1024 or 1280 depending on orientation
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -305,7 +305,7 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
     frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
     frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
-    isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
+    isolated2DHistogram = calloc(MAXVALUE * MT9M001_MAX_HEIGHT, sizeof(uint32_t));
     // frame to hold transposed arrays
     tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
     // TODO: modify makeHistogramsAndSum
@@ -414,9 +414,9 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
     exposureWrite32(concatStr(prefix, "test.dat", bufSize), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
     exposureWrite32(concatStr(prefix, "singles.dat", bufSize), (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32(concatStr(prefix, "pixels.dat", bufSize), (uint32_t *) pixelsHisto, MAXVALUE);
-    exposureWrite32(concatStr(prefix, "sum.dat", bufSize),  frameSum, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
+    //exposureWrite32("sum.dat",  frameSum, FILESIZE_BYTES);
     exposureWrite32(concatStr(prefix, "average.dat", bufSize), (uint32_t *) frameAvg, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT/4);
-    exposureWrite32(concatStr(prefix, "2dhisto.dat", bufSize), (uint32_t *) isolated2DHistogram, MAXVALUE * HISTOGRAM_LENGTH);
+    exposureWrite32(concatStr(prefix, "2dhisto.dat", bufSize), (uint32_t *) isolated2DHistogram, MAXVALUE * MT9M001_MAX_HEIGHT);
 
 //    /* Disable PRU and close memory mapping*/
 //    prussdrv_pru_disable(PRU_NUM0);
@@ -456,7 +456,9 @@ args:
 */
 static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int endTimer) {
     // wait for interrupt from pru0 indicating we can start reading
+    uint32_t datSizeBytes  = FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH;
     int datstatus = 2;
+
     while (datstatus != 1) {
         //datstatus = ((uint32_t *) pruDdrPtr)[-2];
         datstatus = ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET];
@@ -469,7 +471,13 @@ static void exposure(uint8_t *frameptr, uint8_t *pruDdrPtr, int startTimer, int 
     }
     // set status invalid for the next call of this function
     ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_ACK_OFFSET]= 2; 
-    memcpy(frameptr, pruDdrPtr, FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    // get number of bytes to copy (4 bytes for terminating sequence)
+    datSizeBytes = ((uint32_t *) (ddrMem + DDR_OFFSET_0))[DDR_READSIZE_OFFSET] - *((uint32_t *) DDR_physical) + 4;
+    printf("data size: %d\n", datSizeBytes);
+    memcpy(frameptr, pruDdrPtr, datSizeBytes);
+//    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4; i ++) {
+//        ((uint32_t *) frameptr)[i] = ((uint32_t *) pruDdrPtr)[i];
+//    }
     // acknowledge completion of a read
     ackPru();
 }
@@ -551,7 +559,7 @@ static int pru_allocate_ddr_memory()
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract) {
     uint8_t bottom, top, left, right, center;
 
-    // subtraction of dark level and systmatic row-to-row and checkerboard variation
+    // subtraction of dark level or systmatic row-to-row and checkerboard variation
     conditionFrame(src, darkFrame, bgSubtract);
 
     // initialize to 0 the array that will hold isolated events
@@ -598,21 +606,6 @@ void update2DHisto(uint8_t *frame, uint32_t *histo) {
         }
     }
 }
-
-
-//// given pointers to a 2d array of pixel values and a 2d row-by-row histogram
-//// of values, update the histogram
-//void update2DHisto(uint8_t *frame, uint32_t *histo) {
-//    uint8_t value;
-//    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-//        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-//            value = frame[i * MT9M001_MAX_WIDTH + j];
-//            if (value > 0) {
-//                histo[j * MAXVALUE + value] += 1;
-//            }
-//        }
-//    }
-//}
 
 //subtract out row-to-row variation of the mean pixel value for an n x m array
 static void subtractRows(uint8_t *arrA, int n, int m) {
@@ -775,3 +768,7 @@ void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
 //        arr1[i] -= arr2[i];
     }
 }
+
+//// initialize global data for the cluster search 
+//void initClusterSearch () {
+    
