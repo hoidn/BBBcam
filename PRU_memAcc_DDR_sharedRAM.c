@@ -165,8 +165,8 @@ static void nackPru();
 static char *concatStr(char *str1, char *str2, int bufSize);
 static void usage(char *name);
 static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
-static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame);
-void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract);
+static int run_acquisition(char *prefix, uint8_t *darkFrame);
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, int bgSubtract);
 void update2DHisto(uint8_t *frame, uint32_t *histo);
 static void transpose(uint8_t *arrA, uint8_t *arrB, int n, int m);
 static void subtractRows(uint8_t *arrA, int n, int m);
@@ -201,6 +201,10 @@ static uint8_t checkerboardOddAverage = 0;
 static uint8_t darkLevel = 0; 
 uint8_t *tFrame; // array to hold transposed frame
 
+// threshold and ceiling for cluster analysis
+uint8_t threshold = 0; 
+uint8_t ceiling = 200;
+
 static uint32_t numFrames = NUMREADS;
 
 /******************************************************************************
@@ -209,7 +213,6 @@ static uint32_t numFrames = NUMREADS;
 
 int main (int argc, char **argv)
 {
-    int threshold;
     char *end; // error handling for strol
 
     // optional dark count subtraction file
@@ -277,13 +280,13 @@ int main (int argc, char **argv)
         darkFrame = NULL;
     }
 
-    run_acquisition(threshold, fname, darkFrame);
+    run_acquisition(fname, darkFrame);
 
     return 0;
 }
 
     
-static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) {
+static int run_acquisition(char *prefix, uint8_t *darkFrame) {
     unsigned int ret;
     uint8_t *frame; // frame buffer
     uint8_t *frameAvg; // average of all the frames
@@ -391,7 +394,7 @@ static int run_acquisition(uint8_t threshold, char *prefix, uint8_t *darkFrame) 
         if (i > 0) { // throw out i = 0, on really necessary if first frames aren't beng flushed
             for (int j = 0; j < FRAMES_PER_TRANSFER; j ++) {
                 // update histograms with data from this frame
-                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, threshold, 1);
+                makeHistogramsAndSum(frame + j * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, darkFrame, isolatedEventsBuffer, frameSum, pixelsHisto, isolatedHisto, isolated2DHistogram, 1);
             }
         } 
     }
@@ -548,7 +551,7 @@ static int pru_allocate_ddr_memory()
 // adding the frame onto a sum-of-frames array
 // args: 
 //  bgSubtract: 1 to subtract darkLevel and checkerboard pattern, 0 for the alternative
-void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, uint8_t threshold, int bgSubtract) {
+void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, int bgSubtract) {
     uint8_t bottom, top, left, right, center;
 
     // subtraction of dark level and systmatic row-to-row and checkerboard variation
@@ -566,7 +569,7 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
             // if all neighbors are below threshold
             // TODO: don't evaluate top, bottom, left, or right until center >= threshold has been 
             // satisfied
-            if (center >= threshold) {
+            if ((center >= threshold) && (center <= ceiling)) {
                 sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
