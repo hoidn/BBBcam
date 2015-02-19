@@ -202,8 +202,8 @@ static uint8_t darkLevel = 0;
 uint8_t *tFrame; // array to hold transposed frame
 
 // threshold and ceiling for cluster analysis
-uint8_t threshold = 0; 
-uint8_t ceiling = 200;
+uint8_t threshold = 5; 
+uint8_t ceiling = 250;
 
 static uint32_t numFrames = NUMREADS;
 
@@ -588,34 +588,38 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
 
 
 
-// given pointers to a 2d array of pixel values and a 2d row-by-row histogram
-// of values, update the histogram
-void update2DHisto(uint8_t *frame, uint32_t *histo) {
-    uint8_t value;
-    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-            value = frame[i * MT9M001_MAX_WIDTH + j];
-            if (value > 0) {
-                histo[i * MAXVALUE + value] += 1;
-            }
-        }
-    }
-}
-
-
 //// given pointers to a 2d array of pixel values and a 2d row-by-row histogram
 //// of values, update the histogram
+//// corresponds to portrait orientation of sensor (i.e. the long side is perpendicular
+//// to energy dispersion
 //void update2DHisto(uint8_t *frame, uint32_t *histo) {
 //    uint8_t value;
 //    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
 //        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
 //            value = frame[i * MT9M001_MAX_WIDTH + j];
 //            if (value > 0) {
-//                histo[j * MAXVALUE + value] += 1;
+//                histo[i * MAXVALUE + value] += 1;
 //            }
 //        }
 //    }
 //}
+
+
+// given pointers to a 2d array of pixel values and a 2d row-by-row histogram
+// of values, update the histogram
+// corresponds to landscape orientation of sensor (i.e. the long side is parallel
+// to energy dispersion
+void update2DHisto(uint8_t *frame, uint32_t *histo) {
+    uint8_t value;
+    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+            value = frame[i * MT9M001_MAX_WIDTH + j];
+            if (value > 0) {
+                histo[j * MAXVALUE + value] += 1;
+            }
+        }
+    }
+}
 
 //subtract out row-to-row variation of the mean pixel value for an n x m array
 static void subtractRows(uint8_t *arrA, int n, int m) {
@@ -751,6 +755,8 @@ static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
 //    }
 
     // TODO: WHY IS THIS OFFSET NEEDED?
+    // TODO: it would be less computationally intensive to mask out hot pixels instead
+    // of doing a background subtraction
     if (dark != NULL) {
         subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
     }

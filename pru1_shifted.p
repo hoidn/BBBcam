@@ -1,3 +1,4 @@
+
 // *
 // * PRU_memAcc_DDR_sharedRAM.p
 // *
@@ -99,6 +100,8 @@ START:
     NOP
     MOV dst, PIX10_2 // move pix[8:0] into destination reg
     SET SYSCLK // rising edge
+    QBBS MASK_PIXEL, dst, 7 // if most significant bit is 1
+    LSL dst, dst, 1
     NOP
     NOP
 .endm
