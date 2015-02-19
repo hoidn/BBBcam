@@ -21,7 +21,6 @@ static int file;
 static char filename[40];
 static const gchar *buffer;
 
-
 // register values for single-exposure mode. Note: must perform a reset beforehand
 const AddrVal params_1280x1024_trigger[]={
     //wait for 1 sec TODO: is this necessary? 

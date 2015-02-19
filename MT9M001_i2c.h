@@ -3,6 +3,7 @@
 
 #include<stdint.h> 
 
+
 #define MT9M001_CHIP_VERSION            0x00
 #define MT9M001_ROW_START               0x01
 #define MT9M001_COLUMN_START            0x02
