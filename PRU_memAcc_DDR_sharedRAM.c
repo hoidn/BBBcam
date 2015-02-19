@@ -150,6 +150,13 @@ typedef struct {
     uint8_t threshold;
 } FrameState;
 
+struct masked {
+    int size;
+    int rowNums[];// = {167, 552, 1004, 13, 202};
+};
+
+struct masked masked_cols = {5, {167, 552, 1004, 13, 202}};
+
 FrameState frameState = {NULL, NULL, NULL, NULL, NULL, NULL, 0};
 
 /******************************************************************************
@@ -164,6 +171,7 @@ static void ackPru();
 static void nackPru();
 static char *concatStr(char *str1, char *str2, int bufSize);
 static void usage(char *name);
+void zeroColumns(uint8_t *arr, int *indices, int size);
 static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
 static int run_acquisition(char *prefix, uint8_t *darkFrame);
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, int bgSubtract);
@@ -760,6 +768,7 @@ static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
     if (dark != NULL) {
         subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
     }
+    zeroColumns(src, masked_cols.rowNums, masked_cols.size);
 
     // dark level subtraction
     //assert(darkLevel != 0); // check dark level is initialized
@@ -767,6 +776,16 @@ static void conditionFrame(uint8_t *src, uint8_t *dark, int bgSubtract) {
 //    printf("first element before: %d\n", src[500000]);
 //    subConstant(src, darkLevel, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
 //    printf("first element after: %d\n", src[500000]);
+}
+
+// set values in the given columns to 0
+void zeroColumns(uint8_t *arr, int *indices, int size) {
+    for (int k = 0; k < size; k ++) {
+        int j = indices[k];
+        for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
+            arr[i * MT9M001_MAX_WIDTH + j] = 0;
+        }
+    }
 }
 
 //subtract arr2 from arr1
