@@ -46,3 +46,6 @@ TODOs:
 -separate pru code to just provide a clock before the readout firmware is loaded
 
 array of address value pairs can be written all at once to the device.
+
+2/20/2015
+
