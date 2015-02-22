@@ -131,7 +131,7 @@
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
 #define MAXVALUE 256
 #define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
-#define HISTOGRAM_LENGTH MT9M001_MAX_HEIGHT // 1024 or 1280 depending on orientation
+#define HISTOGRAM_LENGTH MT9M001_MAX_WIDTH // 1024 or 1280 depending on orientation
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -209,11 +209,14 @@ static uint8_t checkerboardOddAverage = 0;
 static uint8_t darkLevel = 0; 
 uint8_t *tFrame; // array to hold transposed frame
 
-// threshold and ceiling for cluster analysis
+// threshold and ceiling ADC values for cluster analysis
 uint8_t threshold = 5; 
 uint8_t ceiling = 250;
 
 static uint32_t numFrames = NUMREADS;
+// range of ADC values to keep in the summed frame
+uint8_t lowerBound = 0;
+uint8_t upperBound = 255;
 
 /******************************************************************************
 * Global Function Definitions                                                 *
@@ -230,10 +233,11 @@ int main (int argc, char **argv)
 
     // optional output file prefix
     char *fname = NULL;
+    errno = 0;
 
 
     // handle command line arguments
-    if (argc < 2 || argc > 8) {
+    if (argc < 2 || argc > 11) {
         usage(argv[0]);
         return -1;
     }
@@ -257,12 +261,25 @@ int main (int argc, char **argv)
                 fname = argv[i];
             } else if (strcmp(argv[i], "-n") == 0) {
                 i ++; 
-                errno = 0;
                 numFrames = strtol(argv[i], &end, 10);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
                 }
+            } else if (strcmp(argv[i], "-r") == 0) {
+                i ++;
+                lowerBound = strtol(argv[i], &end, 10);
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+                i ++; 
+                upperBound = strtol(argv[i], &end, 10);
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+                printf("upper and lower bound: %d, %d\n", upperBound, lowerBound);
             } else if (strcmp(argv[i], "-d") == 0) {
                 i ++; 
                 darkName = argv[i];
@@ -321,7 +338,6 @@ static int run_acquisition(char *prefix, uint8_t *darkFrame) {
     tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
     // TODO: modify makeHistogramsAndSum
 
-    printf("\nINFO: Starting %s example.\r\n", "PRU_memAcc_DDR_sharedRAM");
     /* Initialize the PRU */
     prussdrv_init ();
 
@@ -336,8 +352,6 @@ static int run_acquisition(char *prefix, uint8_t *darkFrame) {
 
     /* Get the interrupt initialized */
     prussdrv_pruintc_init(&pruss_intc_initdata);
-
-    printf("\tINFO: Initializing example.\r\n");
 
    // initialize DDR_physical and ddrMem
     DDR_physical = malloc(sizeof(uint32_t));
@@ -366,7 +380,7 @@ static int run_acquisition(char *prefix, uint8_t *darkFrame) {
 
     delay_ms(999);
     // init i2c comm
-    printf("\tINFO: initializing i2c\r\n");
+    printf("\tINFO: configuring sensor\r\n");
     init_readout();
     delay_ms(100);
 
@@ -453,7 +467,7 @@ static char *concatStr(char *str1, char *str2, int bufSize) {
 
 // usage statement
 static void usage(char *name) {
-    printf("usage: %s threshold -o filename [-d darkfilename] [-n number_of_exposures]\n", name);
+    printf("usage: %s threshold -o filename [-d darkfilename] [-n number_of_exposures] [-r lower_bound upper_bound]\n", name);
 }
 
 /* 
@@ -578,7 +592,11 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
             // TODO: don't evaluate top, bottom, left, or right until center >= threshold has been 
             // satisfied
             if ((center >= threshold) && (center <= ceiling)) {
-                sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+                if ((center >= lowerBound) && (center <= upperBound)) {
+                    // TODO: two different modes would be helpful
+                    // sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+                     sum[i * MT9M001_MAX_WIDTH + j] += 1;
+                }
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
