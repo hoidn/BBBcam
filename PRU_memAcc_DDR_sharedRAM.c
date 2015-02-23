@@ -224,7 +224,7 @@ uint8_t upperBound = 255;
 
 int main (int argc, char **argv)
 {
-    char *end; // error handling for strol
+    char *endPtr; // error handling for strol
 
     // optional dark count subtraction file
     char *darkName; 
@@ -243,8 +243,8 @@ int main (int argc, char **argv)
     }
 
     // positional arguments (only one of them)
-    threshold = strtol(argv[1], &end, 10);
-    if (!*end) {
+    threshold = strtol(argv[1], &endPtr, 10);
+    if (!*endPtr) {
         printf("threshold value: %d\n", threshold);
     } else {
         usage(argv[0]);
@@ -261,20 +261,20 @@ int main (int argc, char **argv)
                 fname = argv[i];
             } else if (strcmp(argv[i], "-n") == 0) {
                 i ++; 
-                numFrames = strtol(argv[i], &end, 10);
+                numFrames = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
                 }
             } else if (strcmp(argv[i], "-r") == 0) {
                 i ++;
-                lowerBound = strtol(argv[i], &end, 10);
+                lowerBound = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
                 }
                 i ++; 
-                upperBound = strtol(argv[i], &end, 10);
+                upperBound = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
