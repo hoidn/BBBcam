@@ -1,4 +1,4 @@
-
+# check pinmux configurations of the needed pins
 #inputs
 cat /sys/devices/ocp.*/P9_29_pinmux.*/state
 cat /sys/devices/ocp.*/P9_30_pinmux.*/state
