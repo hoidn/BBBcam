@@ -205,15 +205,17 @@ static uint32_t *DDR_physical; // physical device ddr address
 static unsigned int *sharedMem_int;
 static uint8_t checkerboardEvenAverage = 0;
 static uint8_t checkerboardOddAverage = 0;
+const uint8_t inverse_fractional_gain_correction = 14;
 // dark level based on provided dark exposure
 static uint8_t darkLevel = 0; 
 uint8_t *tFrame; // array to hold transposed frame
 
 // threshold and ceiling ADC values for cluster analysis
 uint8_t threshold = 5; 
-uint8_t ceiling = 250;
+uint8_t ceiling = 255;
 
 static uint32_t numFrames = NUMREADS;
+static uint32_t gain = 0x7f;
 // range of ADC values to keep in the summed frame
 uint8_t lowerBound = 0;
 uint8_t upperBound = 255;
@@ -237,7 +239,7 @@ int main (int argc, char **argv)
 
 
     // handle command line arguments
-    if (argc < 2 || argc > 11) {
+    if (argc < 2 || argc > 12) {
         usage(argv[0]);
         return -1;
     }
@@ -262,6 +264,13 @@ int main (int argc, char **argv)
             } else if (strcmp(argv[i], "-n") == 0) {
                 i ++; 
                 numFrames = strtol(argv[i], &endPtr, 10);
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+            } else if (strcmp(argv[i], "-g") == 0) { // gain
+                i ++; 
+                gain = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
@@ -587,15 +596,18 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
     for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
             center = src[i * MT9M001_MAX_WIDTH + j];
+            // gain correction for 'even' pixels
+            if ((i + j) % 2 == 0) {
+                center += (center / inverse_fractional_gain_correction);
+            }
+            // TODO: two different modes would be helpful
+            //sum[i * MT9M001_MAX_WIDTH + j] += 1;
+            sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
             pixels[center] += 1;
             // if all neighbors are below threshold
-            // TODO: don't evaluate top, bottom, left, or right until center >= threshold has been 
-            // satisfied
             if ((center >= threshold) && (center <= ceiling)) {
+                //sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
                 if ((center >= lowerBound) && (center <= upperBound)) {
-                    // TODO: two different modes would be helpful
-                    // sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
-                     sum[i * MT9M001_MAX_WIDTH + j] += 1;
                 }
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
