@@ -39,16 +39,15 @@ const AddrVal params_1280x1024_trigger[]={
 
 
 // register values for continuous capture mode
-const AddrVal params_1280x1024_continuous[]={
-    MT9M001_OUTPUT_CONTROL, 0x0003,//enable editing of reg values
+AddrVal params_1280x1024_continuous[]={
     //MT9M001_READ_OPTIONS1, 0x8100,//enable snapshot mode 
     //MT9M001_SHUTTER_WIDTH, 0x0800, // shutter width
     MT9M001_BLACK_LEVEL, 0x049a, //disable black level correction
-    MT9M001_GLOBAL_GAIN, 0x007f, //increase gain
-    MT9M001_OUTPUT_CONTROL, 0x0002,//finish editing regs
+    MT9M001_GLOBAL_GAIN, 0x000f, //increase gain
     //MT9M001_OUTPUT_CONTROL, (1 << 6),//test data
     0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
 };
+
 
 // Function declarations
 int delay_ms(unsigned int msec);
@@ -146,11 +145,14 @@ void reset() {
 }
     
 
-int writeArr(const AddrVal *regStructArr) {
+int writeArr(AddrVal *regStructArr) {
     int i=0;// index into struct
     AddrVal current; // an address value pair
     int not_finished=1;
     
+    write16(MT9M001_OUTPUT_CONTROL, 0x0003);//enable editing of reg values
+    delay_ms(10);
+
     do
     {
         // obtain address and value to program
@@ -168,6 +170,10 @@ int writeArr(const AddrVal *regStructArr) {
         delay_ms(10);
         i += 1;
     }while (not_finished);
+
+    write16(MT9M001_OUTPUT_CONTROL, 0x0002);//finish editing regs
+    delay_ms(10);
+    
     // printf("Camera should be working\n");
     return(0);
 }
@@ -221,7 +227,9 @@ int delay_ms(unsigned int msec)
   return(0);
 }
 
-void init_readout() {
+void init_readout(uint16_t gain) {
+    // set the gain
+    params_1280x1024_continuous[1].val = gain;
     sensors_ADC_init();
     reset();
     writeArr(params_1280x1024_continuous);

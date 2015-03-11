@@ -36,16 +36,17 @@ typedef struct addr_val {
     uint16_t val;
 } AddrVal;
 
+
 // variable declarations
 extern const AddrVal params_1280x1024_trigger[];
-extern const AddrVal params_1280x1024_continuous[];
+extern AddrVal params_1280x1024_continuous[];
 
 // Function declarations
 void sensors_ADC_init(void);  
 void write16(uint8_t regAddr, uint16_t value) ; 
 void read16(uint8_t regAddr);  
 // initialize i2c interface and configure sensor fr single capture mode
-void init_readout(); 
+void init_readout(uint16_t gain); 
 int delay_ms(unsigned int msec);
 
 

@@ -155,7 +155,8 @@ struct masked {
     int rowNums[];// = {167, 552, 1004, 13, 202};
 };
 
-struct masked masked_cols = {5, {167, 552, 1004, 13, 202}};
+//struct masked masked_cols = {5, {167, 552, 1004, 13, 202}};
+struct masked masked_cols = {0, {}};
 
 FrameState frameState = {NULL, NULL, NULL, NULL, NULL, NULL, 0};
 
@@ -270,7 +271,7 @@ int main (int argc, char **argv)
                 }
             } else if (strcmp(argv[i], "-g") == 0) { // gain
                 i ++; 
-                gain = strtol(argv[i], &endPtr, 10);
+                gain = strtol(argv[i], &endPtr, 16);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
@@ -390,7 +391,7 @@ static int run_acquisition(char *prefix, uint8_t *darkFrame) {
     delay_ms(999);
     // init i2c comm
     printf("\tINFO: configuring sensor\r\n");
-    init_readout();
+    init_readout(gain);
     delay_ms(100);
 
     printf("\tINFO: Executing PRU program.\r\n");
@@ -602,13 +603,13 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
             }
             // TODO: two different modes would be helpful
             //sum[i * MT9M001_MAX_WIDTH + j] += 1;
-            sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+            if ((center >= lowerBound) && (center <= upperBound)) {
+                sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+            }
             pixels[center] += 1;
             // if all neighbors are below threshold
             if ((center >= threshold) && (center <= ceiling)) {
                 //sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
-                if ((center >= lowerBound) && (center <= upperBound)) {
-                }
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
