@@ -206,7 +206,10 @@ static uint32_t *DDR_physical; // physical device ddr address
 static unsigned int *sharedMem_int;
 static uint8_t checkerboardEvenAverage = 0;
 static uint8_t checkerboardOddAverage = 0;
-const uint8_t inverse_fractional_gain_correction = 14;
+
+// TODO: decide if this is needed or not
+//const uint8_t inverse_fractional_gain_correction = 255;
+//const uint8_t inverse_fractional_gain_correction = 14;
 // dark level based on provided dark exposure
 static uint8_t darkLevel = 0; 
 uint8_t *tFrame; // array to hold transposed frame
@@ -598,9 +601,10 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
         for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
             center = src[i * MT9M001_MAX_WIDTH + j];
             // gain correction for 'even' pixels
-            if ((i + j) % 2 == 0) {
-                center += (center / inverse_fractional_gain_correction);
-            }
+            // TODO: needed or not? 
+//            if ((i + j) % 2 == 0) {
+//                center += (center / inverse_fractional_gain_correction);
+//            }
             // TODO: two different modes would be helpful
             //sum[i * MT9M001_MAX_WIDTH + j] += 1;
             if ((center >= lowerBound) && (center <= upperBound)) {
