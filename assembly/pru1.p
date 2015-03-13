@@ -1,5 +1,5 @@
 // *
-// * PRU_memAcc_DDR_sharedRAM.p
+// * pru1.p
 // *
 // * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
 // *
@@ -45,7 +45,7 @@
 
 
 // *****************************************************************************/
-// file:   PRU_memAcc_DDR_sharedRAM.p
+// file:   pru1.p
 //
 // brief:  PRU Example to access DDR and PRU shared Memory.
 //
@@ -61,7 +61,7 @@
 .origin 0
 .entrypoint MEMACCESS_DDR_PRUSHAREDRAM
 
-#include "PRU_memAcc_DDR_sharedRAM.hp"
+#include "pru.hp"
 
 MEMACCESS_DDR_PRUSHAREDRAM:
 
@@ -90,17 +90,46 @@ START:
 
 
 
-.macro  onepix
+.macro  onepix_9_2
 .mparam dst
     CLR  SYSCLK // falling clock edge
-// wait for pixclk to go low
-//WAITPIXCLK:
-//    QBBS    WAITPIXCLK, r30, PIX_N
+    MOV dst, PIX8_1 // move pix[8:0] into destination reg
+    QBBS LEADING_1, r31, PIX9_N // branch depending on 
+LEADING_0: // most significant bit is 0
+    SET SYSCLK // rising edge
+    LSR dst, dst, 1
+    QBA END_ONEPIX_9_2
+LEADING_1: // most significant bit is 1
+    SET SYSCLK // rising edge
+    LSR dst, dst, 1
+    SET dst, dst, 7
+END_ONEPIX_9_2:
+.endm
+
+.macro  onepix_8_1
+.mparam dst
+    CLR  SYSCLK // falling clock edge
     NOP
-    MOV dst, PIX10_2 // move pix[8:0] into destination reg
+    MOV dst, PIX8_1 // move pix[8:0] into destination reg
     SET SYSCLK // rising edge
     NOP
     NOP
+.endm
+
+.macro  onepix_7_0
+.mparam dst
+    CLR  SYSCLK // falling clock edge
+    MOV dst, PIX8_1 // move pix[8:0] into destination reg
+    QBBS TRAILING_1, r31, PIX0_N // branch depending on 
+TRAILING_0: // least significant bit is 0
+    SET SYSCLK // rising edge
+    LSL dst, dst, 1
+    QBA END_ONEPIX_7_0
+TRAILING_1: // least significant bit is 1
+    SET SYSCLK // rising edge
+    LSL dst, dst, 1
+    SET dst, dst, 0
+END_ONEPIX_7_0:
 .endm
 
 INIT:
@@ -118,7 +147,7 @@ INIT:
         //FOR FLUSHING OPEERATION MODE
         //MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
         //MOV number_frames, NUMFRAMES 
-        
+
         // initialize number_frames from the value written to DDR by host
         INIT_NUM_FRAMES
 
@@ -196,75 +225,81 @@ READLINE:
     QBBC    READLINE, var1, LV_N
 
 
-FILLBUFFER: 
+FILLBUFFER:
     //WBC PIXCLK // latch data on falling edge of PIXCLK
     // read in 32 pixels
     // TODO: could pack data twice as densely if i stick with 8 bits
 
-    onepix  r9.b0
-    onepix  r9.b1
-    onepix  r9.b2
-    onepix  r9.b3
-    onepix  r10.b0
-    onepix  r10.b1
-    onepix  r10.b2
-    onepix  r10.b3
-    onepix  r11.b0
-    onepix  r11.b1
-    onepix  r11.b2
-    onepix  r11.b3
-    onepix  r12.b0
-    onepix  r12.b1
-    onepix  r12.b2
-    onepix  r12.b3
-    onepix  r13.b0
-    onepix  r13.b1
-    onepix  r13.b2
-    onepix  r13.b3
-    onepix  r14.b0
-    onepix  r14.b1
-    onepix  r14.b2
-    onepix  r14.b3
-    onepix  r15.b0
-    onepix  r15.b1
-    onepix  r15.b2
-    onepix  r15.b3
-    onepix  r16.b0
-    onepix  r16.b1
-    onepix  r16.b2
-    onepix  r16.b3
-    onepix  r17.b0
-    onepix  r17.b1
-    onepix  r17.b2
-    onepix  r17.b3
-    onepix  r18.b0
-    onepix  r18.b1
-    onepix  r18.b2
-    onepix  r18.b3
-    onepix  r19.b0
-    onepix  r19.b1
-    onepix  r19.b2
-    onepix  r19.b3
-    onepix  r20.b0
-    onepix  r20.b1
-    onepix  r20.b2
-    onepix  r20.b3
-    onepix  r21.b0
-    onepix  r21.b1
-    onepix  r21.b2
-    onepix  r21.b3
-    onepix  r22.b0
-    onepix  r22.b1
-    onepix  r22.b2
-    onepix  r22.b3
-    onepix  r23.b0
-    onepix  r23.b1
-    onepix  r23.b2
-    onepix  r23.b3
-    onepix  r24.b0
-    onepix  r24.b1
-    onepix  r24.b2
-    onepix  r24.b3
+    onepix_7_0  r9.b0
+    onepix_7_0  r9.b1
+    onepix_7_0  r9.b2
+    onepix_7_0  r9.b3
+    onepix_7_0  r10.b0
+    onepix_7_0  r10.b1
+    onepix_7_0  r10.b2
+    onepix_7_0  r10.b3
+    onepix_7_0  r11.b0
+    onepix_7_0  r11.b1
+    onepix_7_0  r11.b2
+    onepix_7_0  r11.b3
+    onepix_7_0  r12.b0
+    onepix_7_0  r12.b1
+    onepix_7_0  r12.b2
+    onepix_7_0  r12.b3
+    onepix_7_0  r13.b0
+    onepix_7_0  r13.b1
+    onepix_7_0  r13.b2
+    onepix_7_0  r13.b3
+    onepix_7_0  r14.b0
+    onepix_7_0  r14.b1
+    onepix_7_0  r14.b2
+    onepix_7_0  r14.b3
+    onepix_7_0  r15.b0
+    onepix_7_0  r15.b1
+    onepix_7_0  r15.b2
+    onepix_7_0  r15.b3
+    onepix_7_0  r16.b0
+    onepix_7_0  r16.b1
+    onepix_7_0  r16.b2
+    onepix_7_0  r16.b3
+QBA SKIPSTONE_2
+READFRAME_STEPPINGSTONE_2:
+    QBA READFRAME
+READLINE_STEPPINGSTONE_2:
+    QBA READLINE
+SKIPSTONE_2:
+    onepix_7_0  r17.b0
+    onepix_7_0  r17.b1
+    onepix_7_0  r17.b2
+    onepix_7_0  r17.b3
+    onepix_7_0  r18.b0
+    onepix_7_0  r18.b1
+    onepix_7_0  r18.b2
+    onepix_7_0  r18.b3
+    onepix_7_0  r19.b0
+    onepix_7_0  r19.b1
+    onepix_7_0  r19.b2
+    onepix_7_0  r19.b3
+    onepix_7_0  r20.b0
+    onepix_7_0  r20.b1
+    onepix_7_0  r20.b2
+    onepix_7_0  r20.b3
+    onepix_7_0  r21.b0
+    onepix_7_0  r21.b1
+    onepix_7_0  r21.b2
+    onepix_7_0  r21.b3
+    onepix_7_0  r22.b0
+    onepix_7_0  r22.b1
+    onepix_7_0  r22.b2
+    onepix_7_0  r22.b3
+    onepix_7_0  r23.b0
+    onepix_7_0  r23.b1
+    onepix_7_0  r23.b2
+    onepix_7_0  r23.b3
+    onepix_7_0  r24.b0
+    onepix_7_0  r24.b1
+    onepix_7_0  r24.b2
+    onepix_7_0  r24.b3
 
 //    onepix  r9.b0
 //    NOP
@@ -529,9 +564,9 @@ FILLBUFFER:
 
 QBA SKIPSTONE
 READFRAME_STEPPINGSTONE:
-    QBA READLINE
+    QBA READFRAME_STEPPINGSTONE_2
 READLINE_STEPPINGSTONE:
-    QBA READLINE
+    QBA READLINE_STEPPINGSTONE_2
 SKIPSTONE:
 
 //    NOP
@@ -898,15 +933,18 @@ WAIT_LV:
     SET SYSCLK // rising edge
     MOV var1, r31.w0 // read inputs
     QBBS    READLINE_STEPPINGSTONE, var1, LV_N
-        
+
     // otherwise return to polling FV, unless this was the last line
     //QBNE READFRAME, reads_left, 0
     CLR  SYSCLK // falling clock edge
     NOP
     NOP
     SET SYSCLK // rising edge
-    MOV var1, r31.w0 // read inputs
-    QBBS    WAIT_LV, var1, FV_N
+    // wait for signal propagation. THIS HAS BEEN SHOWN TO BE NECESSARY
+    // WITH V2 and V3 OF THE INTERFACE BOARD
+    NOP
+    // read out another line if FV is still 1. Check the value
+    QBBS    WAIT_LV, r31, FV_N
 
 
 REPEAT: // however many more frames are specified

@@ -7,7 +7,8 @@ echo cape-universal > /sys/devices/bone_capemgr.9/slots
 echo cape-univ-emmc > /sys/devices/bone_capemgr.9/slots
 
 #inputs
-#echo pruin > /sys/devices/ocp.*/P8_20_pinmux.*/state #emmc
+echo pruin > /sys/devices/ocp.*/P8_20_pinmux.*/state #emmc, d9
+echo pruin > /sys/devices/ocp.*/P8_21_pinmux.*/state #emmc, d0
 echo pruin > /sys/devices/ocp.*/P8_27_pinmux.*/state
 echo pruin > /sys/devices/ocp.*/P8_29_pinmux.*/state
 echo pruin > /sys/devices/ocp.*/P8_30_pinmux.*/state
@@ -28,5 +29,4 @@ echo pruin > /sys/devices/ocp.*/P9_30_pinmux.*/state
 #outputs
 echo pruout > /sys/devices/ocp.*/P8_11_pinmux.*/state #OE for buffers SET FROM PRU0!
 echo pruout > /sys/devices/ocp.*/P8_28_pinmux.*/state #SYSCLK
-echo pruout > /sys/devices/ocp.*/P8_21_pinmux.*/state #emmc
 #echo pruout > /sys/devices/ocp.*/P8_12_pinmux.*/state 

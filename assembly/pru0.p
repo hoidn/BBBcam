@@ -1,5 +1,5 @@
 // *
-// * PRU_memAcc_DDR_sharedRAM.p
+// * pru0.p
 // *
 // * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
 // *
@@ -45,7 +45,7 @@
 
 
 // *****************************************************************************/
-// file:   PRU_memAcc_DDR_sharedRAM.p
+// file:   pru0.p
 //
 // brief:  PRU Example to access DDR and PRU shared Memory.
 //
@@ -61,7 +61,7 @@
 .origin 0
 .entrypoint MEMACCESS_DDR_PRUSHAREDRAM
 
-#include "PRU_memAcc_DDR_sharedRAM.hp"
+#include "pru.hp"
 
 // Address for the Constant table Block Index Register (CTBIR) for PRU0
 #define CTBIR_0          0x22020
@@ -93,43 +93,6 @@
  QBEQ    DIAG_STATE_1, diag_state, 1
 DIAG_STATE_0:
     // in an even row
-    SUB r9.b1, r9.b1, DIAG_CORRECTION
-    SUB r9.b3, r9.b3, DIAG_CORRECTION
-    SUB r10.b1, r10.b1, DIAG_CORRECTION
-    SUB r10.b3, r10.b3, DIAG_CORRECTION
-    SUB r11.b1, r11.b1, DIAG_CORRECTION
-    SUB r11.b3, r11.b3, DIAG_CORRECTION
-    SUB r12.b1, r12.b1, DIAG_CORRECTION
-    SUB r12.b3, r12.b3, DIAG_CORRECTION
-    SUB r13.b1, r13.b1, DIAG_CORRECTION
-    SUB r13.b3, r13.b3, DIAG_CORRECTION
-    SUB r14.b1, r14.b1, DIAG_CORRECTION
-    SUB r14.b3, r14.b3, DIAG_CORRECTION
-    SUB r15.b1, r15.b1, DIAG_CORRECTION
-    SUB r15.b3, r15.b3, DIAG_CORRECTION
-    SUB r16.b1, r16.b1, DIAG_CORRECTION
-    SUB r16.b3, r16.b3, DIAG_CORRECTION
-    SUB r17.b1, r17.b1, DIAG_CORRECTION
-    SUB r17.b3, r17.b3, DIAG_CORRECTION
-    SUB r18.b1, r18.b1, DIAG_CORRECTION
-    SUB r18.b3, r18.b3, DIAG_CORRECTION
-    SUB r19.b1, r19.b1, DIAG_CORRECTION
-    SUB r19.b3, r19.b3, DIAG_CORRECTION
-    SUB r20.b1, r20.b1, DIAG_CORRECTION
-    SUB r20.b3, r20.b3, DIAG_CORRECTION
-    SUB r21.b1, r21.b1, DIAG_CORRECTION
-    SUB r21.b3, r21.b3, DIAG_CORRECTION
-    SUB r22.b1, r22.b1, DIAG_CORRECTION
-    SUB r22.b3, r22.b3, DIAG_CORRECTION
-    SUB r23.b1, r23.b1, DIAG_CORRECTION
-    SUB r23.b3, r23.b3, DIAG_CORRECTION
-    SUB r24.b1, r24.b1, DIAG_CORRECTION
-    SUB r24.b3, r24.b3, DIAG_CORRECTION
-
-    QBA DONE_DIAG_CORRECTION
-
-DIAG_STATE_1:
-    // in an odd row
     SUB r9.b0, r9.b0, DIAG_CORRECTION
     SUB r9.b2, r9.b2, DIAG_CORRECTION
     SUB r10.b0, r10.b0, DIAG_CORRECTION
@@ -162,6 +125,43 @@ DIAG_STATE_1:
     SUB r23.b2, r23.b2, DIAG_CORRECTION
     SUB r24.b0, r24.b0, DIAG_CORRECTION
     SUB r24.b2, r24.b2, DIAG_CORRECTION
+
+    QBA DONE_DIAG_CORRECTION
+
+DIAG_STATE_1:
+    // in an odd row
+    SUB r9.b1, r9.b1, DIAG_CORRECTION
+    SUB r9.b3, r9.b3, DIAG_CORRECTION
+    SUB r10.b1, r10.b1, DIAG_CORRECTION
+    SUB r10.b3, r10.b3, DIAG_CORRECTION
+    SUB r11.b1, r11.b1, DIAG_CORRECTION
+    SUB r11.b3, r11.b3, DIAG_CORRECTION
+    SUB r12.b1, r12.b1, DIAG_CORRECTION
+    SUB r12.b3, r12.b3, DIAG_CORRECTION
+    SUB r13.b1, r13.b1, DIAG_CORRECTION
+    SUB r13.b3, r13.b3, DIAG_CORRECTION
+    SUB r14.b1, r14.b1, DIAG_CORRECTION
+    SUB r14.b3, r14.b3, DIAG_CORRECTION
+    SUB r15.b1, r15.b1, DIAG_CORRECTION
+    SUB r15.b3, r15.b3, DIAG_CORRECTION
+    SUB r16.b1, r16.b1, DIAG_CORRECTION
+    SUB r16.b3, r16.b3, DIAG_CORRECTION
+    SUB r17.b1, r17.b1, DIAG_CORRECTION
+    SUB r17.b3, r17.b3, DIAG_CORRECTION
+    SUB r18.b1, r18.b1, DIAG_CORRECTION
+    SUB r18.b3, r18.b3, DIAG_CORRECTION
+    SUB r19.b1, r19.b1, DIAG_CORRECTION
+    SUB r19.b3, r19.b3, DIAG_CORRECTION
+    SUB r20.b1, r20.b1, DIAG_CORRECTION
+    SUB r20.b3, r20.b3, DIAG_CORRECTION
+    SUB r21.b1, r21.b1, DIAG_CORRECTION
+    SUB r21.b3, r21.b3, DIAG_CORRECTION
+    SUB r22.b1, r22.b1, DIAG_CORRECTION
+    SUB r22.b3, r22.b3, DIAG_CORRECTION
+    SUB r23.b1, r23.b1, DIAG_CORRECTION
+    SUB r23.b3, r23.b3, DIAG_CORRECTION
+    SUB r24.b1, r24.b1, DIAG_CORRECTION
+    SUB r24.b3, r24.b3, DIAG_CORRECTION
 
 
     DONE_DIAG_CORRECTION:
