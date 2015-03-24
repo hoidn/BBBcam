@@ -3,6 +3,7 @@
 
 #include<stdint.h> 
 
+#define MT9M001_GLOBAL_GAIN_STR         "0x35"
 
 #define MT9M001_CHIP_VERSION            0x00
 #define MT9M001_ROW_START               0x01
@@ -40,11 +41,12 @@ typedef struct addr_val {
 // variable declarations
 extern const AddrVal params_1280x1024_trigger[];
 extern AddrVal params_1280x1024_continuous[];
+extern char i2c_comm_buf[10];
 
 // Function declarations
 void sensors_ADC_init(void);  
-void write16(uint8_t regAddr, uint16_t value) ; 
-void read16(uint8_t regAddr);  
+void write16(uint8_t regAddr, uint16_t value); 
+uint16_t read16(char *regAddr);  
 // initialize i2c interface and configure sensor fr single capture mode
 void init_readout(uint16_t gain); 
 int delay_ms(unsigned int msec);

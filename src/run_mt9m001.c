@@ -81,6 +81,7 @@
 #include <pruss_intc_mapping.h>
 #include <assert.h>
 #include <time.h>
+#include <unistd.h>
 
 // Driver header file
 #include "prussdrv.h"
@@ -164,6 +165,10 @@ FrameState frameState = {NULL, NULL, NULL, NULL, NULL, NULL, 0};
 * Local Function Declarations                                                 *
 ******************************************************************************/
 
+static int check_gain();
+static int check_camera_running(); // check for /var/lock/mt9m001_camera
+static int set_camera_lock(); // create /var/lock/mt9m001_camera to indicate camera's initialization
+static int config_pru();
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize);
 static void sendDDRbase();
 static int pru_allocate_ddr_memory();
@@ -198,7 +203,6 @@ static clock_t start, end;
 /******************************************************************************
 * Global Variable Definitions                                                 *
 ******************************************************************************/
-
 static int mem_fd;
 static void *ddrMem, *sharedMem;
 static uint32_t *DDR_physical; // physical device ddr address
@@ -219,7 +223,9 @@ uint8_t threshold = 5;
 uint8_t ceiling = 255;
 
 static uint32_t numFrames = NUMREADS;
-static uint32_t gain = 0x7f;
+static char gainStr[10];
+static uint32_t gain = 0;
+static uint32_t configure = 0;
 // range of ADC values to keep in the summed frame
 uint8_t lowerBound = 0;
 uint8_t upperBound = 255;
@@ -275,11 +281,18 @@ int main (int argc, char **argv)
             } else if (strcmp(argv[i], "-g") == 0) { // gain
                 i ++; 
                 gain = strtol(argv[i], &endPtr, 16);
+                strcpy(gainStr, argv[i]);
                 if (errno != 0) {
                     usage(argv[0]);
                     exit(1);
                 }
-            } else if (strcmp(argv[i], "-r") == 0) {
+            }  else if (strcmp(argv[i], "-c") == 0) { // configure sensor
+                configure = 1;
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+            }else if (strcmp(argv[i], "-r") == 0) { // range of valid ADC values
                 i ++;
                 lowerBound = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
@@ -317,40 +330,44 @@ int main (int argc, char **argv)
     } else {
         darkFrame = NULL;
     }
-
+    // TODO: refactor
+    if (configure == 1) {
+        config_pru(1);
+    } else {
+        if (!check_camera_running()) { // camera not initialized
+            config_pru(1);
+            set_camera_lock();
+        } else {
+            config_pru(0);
+        }
+    }
+    // only initialize the gain value if necessary
+    if (gain != 0) {
+        if (gain != check_gain()) {
+            init_readout(gain);
+        }
+        delay_ms(100);
+    }
     run_acquisition(fname, darkFrame);
 
     return 0;
 }
 
-    
-static int run_acquisition(char *prefix, uint8_t *darkFrame) {
+
+// initialize communication with the PRUs 
+static int config_pru(int initial_config) {
     unsigned int ret;
-    uint8_t *frame; // frame buffer
-    uint8_t *frameAvg; // average of all the frames
-    uint8_t *isolatedEventsBuffer; // average of all the frames
-    uint32_t *isolatedHisto; //histogram of value sof isolated pixels
-    uint32_t *pixelsHisto; //histogram of values of all pixels
-    uint32_t *frameSum; //histogram of values of all pixels
-    uint32_t *isolated2DHistogram; //row-by-row histogram of values of isolated pixels
-    int bufSize = 256; // buffer for output file name strings
-    char nameBuffer[bufSize];
-
+    if (initial_config) {
+        if (system("sudo pinmux_config") == -1) {
+            printf("Pinmux configuration failed\n");
+        } else {
+            printf("Configured pinmux\n");
+        }
+    }
+    // init i2c comm
+    printf("\tINFO: performed sensor initial configuration\r\n");
+    printf("configuring pru\n");
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
-
-    // allocate mem for arrays
-    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
-    // TODO: this will break if FRAMES_PER_TRANSFER != 1
-    isolatedEventsBuffer = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint8_t));
-    isolatedHisto = calloc(MAXVALUE, sizeof(uint32_t));
-    pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
-    frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
-    frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
-    isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
-    // frame to hold transposed arrays
-    tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
-    // TODO: modify makeHistogramsAndSum
-
     /* Initialize the PRU */
     prussdrv_init ();
 
@@ -387,19 +404,44 @@ static int run_acquisition(char *prefix, uint8_t *darkFrame) {
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
     prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
 
+    if (initial_config) {
+        prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
+        prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin"); // start running clock
+        delay_ms(999);
+        printf("running the clock\n");
+    }
+}
 
-    prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
-    prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin"); // start running clock
+    
+static int run_acquisition(char *prefix, uint8_t *darkFrame) {
+    uint8_t *frame; // frame buffer
+    uint8_t *frameAvg; // average of all the frames
+    uint8_t *isolatedEventsBuffer; // average of all the frames
+    uint32_t *isolatedHisto; //histogram of value sof isolated pixels
+    uint32_t *pixelsHisto; //histogram of values of all pixels
+    uint32_t *frameSum; //histogram of values of all pixels
+    uint32_t *isolated2DHistogram; //row-by-row histogram of values of isolated pixels
+    int bufSize = 256; // buffer for output file name strings
+    char nameBuffer[bufSize];
 
-    delay_ms(999);
-    // init i2c comm
-    printf("\tINFO: configuring sensor\r\n");
-    init_readout(gain);
-    delay_ms(100);
+
+    // allocate mem for arrays
+    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    // TODO: this will break if FRAMES_PER_TRANSFER != 1
+    isolatedEventsBuffer = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint8_t));
+    isolatedHisto = calloc(MAXVALUE, sizeof(uint32_t));
+    pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
+    frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
+    frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
+    isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
+    // frame to hold transposed arrays
+    tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
+    // TODO: modify makeHistogramsAndSum
 
     printf("\tINFO: Executing PRU program.\r\n");
     prussdrv_exec_program (PRU_NUM0, "./pru0.bin");
     prussdrv_exec_program (PRU_NUM1, "./pru1.bin");
+    // TODO: is this delay necessary?
     delay_ms(100);
     // trigger an exposure
     // trigger a readout if we're doing single exposure mode
@@ -480,7 +522,7 @@ static char *concatStr(char *str1, char *str2, int bufSize) {
 
 // usage statement
 static void usage(char *name) {
-    printf("usage: %s threshold -o filename [-d darkfilename] [-n number_of_exposures] [-r lower_bound upper_bound]\n", name);
+    printf("usage: %s threshold -o filename [-d darkfilename] [-n number_of_exposures] [-g gain] [-c] [-r lower_bound upper_bound]\n", name);
 }
 
 /* 
@@ -838,3 +880,20 @@ void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
 //        arr1[i] -= arr2[i];
     }
 }
+
+static int check_camera_running() {
+    return ( access( "/var/lock/mt9m001_camera", F_OK ) != -1 );
+}
+
+static int set_camera_lock() {
+    if (system("touch /var/lock/mt9m001_camera") == -1) {
+        return -1; 
+    } else {
+        return 0;
+    }
+}
+
+static int check_gain() {
+    return read16(MT9M001_GLOBAL_GAIN_STR);
+}
+

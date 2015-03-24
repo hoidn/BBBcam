@@ -122,7 +122,7 @@
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
 #define FRAMES_PER_TRANSFER 1 // number of frames at a time for arm to copy
-#define DIAG_CORRECTION 16
+#define DIAG_CORRECTION 0
 
 #define DDR_OFFSET 8 // offset to data region in ddr
 #define NUM_FRAMES_OFFSET 8 // offset to field in local pru mem from which to initialize number_frames

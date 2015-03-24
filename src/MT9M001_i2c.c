@@ -16,7 +16,7 @@
 #include "MT9M001_i2c.h"
 
 
-static char buf[10] = {0};
+char i2c_comm_buf[] = {0};
 static int file;
 static char filename[40];
 static const gchar *buffer;
@@ -79,22 +79,22 @@ sensors_ADC_init(void) {
      float data;
      char channel;
 
-     buf[0] = 0x00; 
-     if (write(file,buf,1) != 1) {
+     i2c_comm_buf[0] = 0x00; 
+     if (write(file,i2c_comm_buf,1) != 1) {
          //ERROR HANDLING: i2c transaction failed 
         printf("Failed to write to the i2c bus.\n");
         buffer = g_strerror(errno);
         printf(buffer);
         printf("\n\n");
     }
-      if (read(file,buf,2) != 2) {
+      if (read(file,i2c_comm_buf,2) != 2) {
          //ERROR HANDLING: i2c transaction failed 
          printf("Failed to read from the i2c bus.\n");
          buffer = g_strerror(errno);
          printf(buffer);
          printf("\n\n");
      } else {
-         printf("%x, %x\n",buf[0],buf[1]);
+         printf("%x, %x\n",i2c_comm_buf[0],i2c_comm_buf[1]);
      }
 */
 }
@@ -103,10 +103,10 @@ sensors_ADC_init(void) {
 //(assumes little-endian machine)
 void write16(uint8_t regAddr, uint16_t value) {
   uint8_t* valPtr = (uint8_t*) &value; 
-  buf[0] = regAddr; 
-  buf[1] = *(valPtr + 1); 
-  buf[2] = *valPtr; 
-     if (write(file,buf,3) != 3) {
+  i2c_comm_buf[0] = regAddr; 
+  i2c_comm_buf[1] = *(valPtr + 1); 
+  i2c_comm_buf[2] = *valPtr; 
+     if (write(file,i2c_comm_buf,3) != 3) {
         //ERROR HANDLING: i2c transaction failed 
        printf("Failed to write to the i2c bus.\n");
        buffer = g_strerror(errno);
@@ -116,28 +116,61 @@ void write16(uint8_t regAddr, uint16_t value) {
   //delay_ms(50); // see if too-fast successive reads/writes were causing sensor to choke
 }
 
-void read16(uint8_t regAddr) {
-  buf[0] = regAddr; 
-  if (write(file,buf,1) != 1) {
-      //ERROR HANDLING: i2c transaction failed 
-     printf("Failed to write to the i2c bus.\n");
-     buffer = g_strerror(errno);
-     printf(buffer);
-     printf("\n\n");
- }
-  if (read(file,buf,2) != 2) {
-     //ERROR HANDLING: i2c transaction failed 
-     printf("Failed to read from the i2c bus.\n");
-     buffer = g_strerror(errno);
-     printf(buffer);
-     printf("\n\n");
- } else {
-     printf("%x, %x\n",buf[0],buf[1]);
- }
-  //delay_ms(50); // see if too-fast successive reads/writes were causing sensor to choke
+//void read16(uint8_t regAddr) {
+//  i2c_comm_buf[0] = regAddr; 
+//  if (write(file,i2c_comm_buf,1) != 1) {
+//      //ERROR HANDLING: i2c transaction failed 
+//     printf("Failed to write to the i2c bus.\n");
+//     buffer = g_strerror(errno);
+//     printf(buffer);
+//     printf("\n\n");
+// }
+//  if (read(file,i2c_comm_buf,2) != 2) {
+//     //ERROR HANDLING: i2c transaction failed 
+//     printf("Failed to read from the i2c bus.\n");
+//     buffer = g_strerror(errno);
+//     printf(buffer);
+//     printf("\n\n");
+// } else {
+//     printf("%x, %x, %x\n",i2c_comm_buf[0],i2c_comm_buf[1], i2c_comm_buf[2]);
+// }
+//}
+
+
+// uses external i2cget command because above implementation
+// of i2cget seems to misbehave
+// regAddr: a hex string denoting a register address
+// preforms endianness conversion
+uint16_t read16(char *regAddr) {
+    char cmd[100] = {0};
+    char regStr[10] = {0};
+    char result[10] = {0};
+    char *endPtr;
+    uint16_t result_int;
+    FILE *fp; 
+
+    strcpy(cmd, "sudo i2cget -y 1 0x5d ");
+    strcat(cmd, regAddr);
+    strcat(cmd, " w");
+
+    fp = popen(cmd, "r");
+    if (fp == NULL) {
+        printf("Failed to run i2cget command\n"); 
+        exit(1);
+    }
+    fgets(result, sizeof(result) - 1, fp);
+    result_int =  strtol(result, &endPtr, 16);
+    // swap bytes
+    result_int = (result_int >> 8) + (result_int & 0xff);
+// TODO: why does this fail despite apparent success?
+//    if (*endPtr) {
+//        printf("Conversion error \n");
+//        exit(1);
+//    } 
+    return result_int;
 }
 
-// reset the sensor
+  // reset the sensor
 void reset() {
     write16(MT9M001_RESET, 0x0001);
     delay_ms(999);
@@ -181,25 +214,25 @@ int writeArr(AddrVal *regStructArr) {
 /*
     for(int i = 0; i<4; i++) {
         // Using I2C Read
-        if (read(file,buf,2) != 2) {
+        if (read(file,i2c_comm_buf,2) != 2) {
             //ERROR HANDLING: i2c transaction failed 
             printf("Failed to read from the i2c bus.\n");
             buffer = g_strerror(errno);
             printf(buffer);
             printf("\n\n");
         } else {
-            data = (float)((buf[0] & 0b00001111)<<8)+buf[1];
+            data = (float)((i2c_comm_buf[0] & 0b00001111)<<8)+i2c_comm_buf[1];
             data = data/4096*5;
-            channel = ((buf[0] & 0b00110000)>>4);
+            channel = ((i2c_comm_buf[0] & 0b00110000)>>4);
             printf("Channel %02d Data:  %04f\n",channel,data);
         }
     }
 
     //unsigned char reg = 0x10; // Device register to access
-    //buf[0] = reg;
-    buf[0] = 0b11110000;
+    //i2c_comm_buf[0] = reg;
+    i2c_comm_buf[0] = 0b11110000;
 
-    if (write(file,buf,1) != 1) {
+    if (write(file,i2c_comm_buf,1) != 1) {
          //ERROR HANDLING: i2c transaction failed 
         printf("Failed to write to the i2c bus.\n");
         buffer = g_strerror(errno);
@@ -229,6 +262,7 @@ int delay_ms(unsigned int msec)
 
 void init_readout(uint16_t gain) {
     // set the gain
+    printf("    INFO: configuring MT9M001 registers\n");
     params_1280x1024_continuous[1].val = gain;
     sensors_ADC_init();
     reset();

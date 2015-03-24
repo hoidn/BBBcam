@@ -226,9 +226,7 @@ READLINE:
 
 
 FILLBUFFER:
-    //WBC PIXCLK // latch data on falling edge of PIXCLK
-    // read in 32 pixels
-    // TODO: could pack data twice as densely if i stick with 8 bits
+    // read in 64 pixels
 
     onepix_7_0  r9.b0
     onepix_7_0  r9.b1
