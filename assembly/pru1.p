@@ -109,11 +109,17 @@ END_ONEPIX_9_2:
 .macro  onepix_8_1
 .mparam dst
     CLR  SYSCLK // falling clock edge
-    NOP
     MOV dst, PIX8_1 // move pix[8:0] into destination reg
+    QBBS SATURATED, r31, PIX9_N // saturated if most significant bit is 1
+UNSATURATED: // pix value is good
     SET SYSCLK // rising edge
     NOP
+    QBA END_ONEPIX_8_1
+SATURATED: // pix value overflowed
+    SET SYSCLK
+    MOV dst, 255
     NOP
+END_ONEPIX_8_1:
 .endm
 
 .macro  onepix_7_0
@@ -228,76 +234,76 @@ READLINE:
 FILLBUFFER:
     // read in 64 pixels
 
-    onepix_7_0  r9.b0
-    onepix_7_0  r9.b1
-    onepix_7_0  r9.b2
-    onepix_7_0  r9.b3
-    onepix_7_0  r10.b0
-    onepix_7_0  r10.b1
-    onepix_7_0  r10.b2
-    onepix_7_0  r10.b3
-    onepix_7_0  r11.b0
-    onepix_7_0  r11.b1
-    onepix_7_0  r11.b2
-    onepix_7_0  r11.b3
-    onepix_7_0  r12.b0
-    onepix_7_0  r12.b1
-    onepix_7_0  r12.b2
-    onepix_7_0  r12.b3
-    onepix_7_0  r13.b0
-    onepix_7_0  r13.b1
-    onepix_7_0  r13.b2
-    onepix_7_0  r13.b3
-    onepix_7_0  r14.b0
-    onepix_7_0  r14.b1
-    onepix_7_0  r14.b2
-    onepix_7_0  r14.b3
-    onepix_7_0  r15.b0
-    onepix_7_0  r15.b1
-    onepix_7_0  r15.b2
-    onepix_7_0  r15.b3
-    onepix_7_0  r16.b0
-    onepix_7_0  r16.b1
-    onepix_7_0  r16.b2
-    onepix_7_0  r16.b3
+    onepix_8_1  r9.b0
+    onepix_8_1  r9.b1
+    onepix_8_1  r9.b2
+    onepix_8_1  r9.b3
+    onepix_8_1  r10.b0
+    onepix_8_1  r10.b1
+    onepix_8_1  r10.b2
+    onepix_8_1  r10.b3
+    onepix_8_1  r11.b0
+    onepix_8_1  r11.b1
+    onepix_8_1  r11.b2
+    onepix_8_1  r11.b3
+    onepix_8_1  r12.b0
+    onepix_8_1  r12.b1
+    onepix_8_1  r12.b2
+    onepix_8_1  r12.b3
+    onepix_8_1  r13.b0
+    onepix_8_1  r13.b1
+    onepix_8_1  r13.b2
+    onepix_8_1  r13.b3
+    onepix_8_1  r14.b0
+    onepix_8_1  r14.b1
+    onepix_8_1  r14.b2
+    onepix_8_1  r14.b3
+    onepix_8_1  r15.b0
+    onepix_8_1  r15.b1
+    onepix_8_1  r15.b2
+    onepix_8_1  r15.b3
+    onepix_8_1  r16.b0
+    onepix_8_1  r16.b1
+    onepix_8_1  r16.b2
+    onepix_8_1  r16.b3
 QBA SKIPSTONE_2
 READFRAME_STEPPINGSTONE_2:
     QBA READFRAME
 READLINE_STEPPINGSTONE_2:
     QBA READLINE
 SKIPSTONE_2:
-    onepix_7_0  r17.b0
-    onepix_7_0  r17.b1
-    onepix_7_0  r17.b2
-    onepix_7_0  r17.b3
-    onepix_7_0  r18.b0
-    onepix_7_0  r18.b1
-    onepix_7_0  r18.b2
-    onepix_7_0  r18.b3
-    onepix_7_0  r19.b0
-    onepix_7_0  r19.b1
-    onepix_7_0  r19.b2
-    onepix_7_0  r19.b3
-    onepix_7_0  r20.b0
-    onepix_7_0  r20.b1
-    onepix_7_0  r20.b2
-    onepix_7_0  r20.b3
-    onepix_7_0  r21.b0
-    onepix_7_0  r21.b1
-    onepix_7_0  r21.b2
-    onepix_7_0  r21.b3
-    onepix_7_0  r22.b0
-    onepix_7_0  r22.b1
-    onepix_7_0  r22.b2
-    onepix_7_0  r22.b3
-    onepix_7_0  r23.b0
-    onepix_7_0  r23.b1
-    onepix_7_0  r23.b2
-    onepix_7_0  r23.b3
-    onepix_7_0  r24.b0
-    onepix_7_0  r24.b1
-    onepix_7_0  r24.b2
-    onepix_7_0  r24.b3
+    onepix_8_1  r17.b0
+    onepix_8_1  r17.b1
+    onepix_8_1  r17.b2
+    onepix_8_1  r17.b3
+    onepix_8_1  r18.b0
+    onepix_8_1  r18.b1
+    onepix_8_1  r18.b2
+    onepix_8_1  r18.b3
+    onepix_8_1  r19.b0
+    onepix_8_1  r19.b1
+    onepix_8_1  r19.b2
+    onepix_8_1  r19.b3
+    onepix_8_1  r20.b0
+    onepix_8_1  r20.b1
+    onepix_8_1  r20.b2
+    onepix_8_1  r20.b3
+    onepix_8_1  r21.b0
+    onepix_8_1  r21.b1
+    onepix_8_1  r21.b2
+    onepix_8_1  r21.b3
+    onepix_8_1  r22.b0
+    onepix_8_1  r22.b1
+    onepix_8_1  r22.b2
+    onepix_8_1  r22.b3
+    onepix_8_1  r23.b0
+    onepix_8_1  r23.b1
+    onepix_8_1  r23.b2
+    onepix_8_1  r23.b3
+    onepix_8_1  r24.b0
+    onepix_8_1  r24.b1
+    onepix_8_1  r24.b2
+    onepix_8_1  r24.b3
 
 //    onepix  r9.b0
 //    NOP
