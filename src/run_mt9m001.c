@@ -127,6 +127,7 @@
 #define PRUSS0_SHARED_DATARAM    4
 #define PRUSS1_SHARED_DATARAM    4
 
+#define DIAG_CORRECTION (256 - 8)
 #define NUMREADS 40  // default number of batches of frames
 #define FRAMES_PER_TRANSFER 1
 #define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
@@ -629,7 +630,8 @@ static int pru_allocate_ddr_memory()
 // args: 
 //  bgSubtract: 1 to subtract darkLevel and checkerboard pattern, 0 for the alternative
 void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEventsBuffer, uint32_t *sum, uint32_t *pixels, uint32_t *isolated, uint32_t *isolated2DHistogram, int bgSubtract) {
-    uint8_t bottom, top, left, right, center;
+    uint8_t bottom, top, left, right, center, corrected_threshold;
+    uint8_t diag_correction = (uint8_t) -DIAG_CORRECTION;
 
     // subtraction of dark level and systmatic row-to-row and checkerboard variation
     conditionFrame(src, darkFrame, bgSubtract);
@@ -644,14 +646,22 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
             center = src[i * MT9M001_MAX_WIDTH + j];
             // gain correction for 'even' pixels
             // TODO: needed or not? 
-//            if ((i + j) % 2 == 0) {
-//                center += (center / inverse_fractional_gain_correction);
-//            }
+            if (((i + j) % 2 == 0) && (threshold > diag_correction)) {
+                //center += (center / inverse_fractional_gain_correction);
+                corrected_threshold = threshold - diag_correction;
+            } else {
+                corrected_threshold = threshold;
+//                threshold = threshold - diag_correction;
+            }
             // TODO: two different modes would be helpful
-            //sum[i * MT9M001_MAX_WIDTH + j] += 1;
-            if ((center >= lowerBound) && (center <= upperBound)) {
+//            //sum[i * MT9M001_MAX_WIDTH + j] += 1;
+            if ((center >= threshold) && (center >= lowerBound) && (center <= upperBound)) {
                 sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
             }
+            // all above-threshold pixels go into sum frame
+//            if (center >= threshold) {
+//                sum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+//            }
             pixels[center] += 1;
             // if all neighbors are below threshold
             if ((center >= threshold) && (center <= ceiling)) {
@@ -660,7 +670,7 @@ void makeHistogramsAndSum(uint8_t *src,  uint8_t *darkFrame, uint8_t *isolatedEv
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
                 left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
-                if ((top < threshold) && (bottom < threshold) && (right < threshold) && (left < threshold)) {
+                if ((top < corrected_threshold) && (bottom < corrected_threshold) && (right < corrected_threshold) && (left < corrected_threshold)) {
                     isolated[center] += 1;
                     isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
                 }
