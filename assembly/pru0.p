@@ -197,9 +197,11 @@ INIT:
         SUB frame_counter, frame_counter, 1 // intentional underflow
 
         // TODO: what does this do? (configure interrupts?)
-        LBCO r0, CONST_PRUCFG, 0x34, 4                    
+        LBCO r0, CONST_PRUCFG, 0x34, 4
         SET r0, 1
         SBCO r0, CONST_PRUCFG, 0x34, 4
+        // zero r0 for correct behavior of XIN/XOUT
+        MOV r0, 0
 
         // set ACK field in PRU mem to 1 to get the ball rolling
         LDI     pr0ack, 1
@@ -217,7 +219,6 @@ INIT:
         // initialize number_frames from the value written to DDR by host
         INIT_NUM_FRAMES
         ADD number_frames, number_frames, 1
-        
         // initialize ARM ack to 0
         MOV var1, 0
         //SBCO    var1, CONST_PRUSHAREDRAM, ARM_PRU_ACK_OFFSET, 4
@@ -280,13 +281,13 @@ READ:
         MOV transfer_ready, 0
         SBCO    transfer_ready, CONST_PRUSHAREDRAM, 4, 4
         // load data
-        LBCO    data_start, CONST_PRUSHAREDRAM, 8, CHUNKSIZE
+        XIN 10, data_start, CHUNKSIZE
 
         //do correction for checkerboard pattern
         diag_correction
 
         // copy data to DDR
-        SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE 
+        SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE
 
         //write ACK to PRU mem
         SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
@@ -317,11 +318,9 @@ FRAME_END:
 
     // Send notification to to host that one frame has been read out
     //MOV       r31.b0, PRU0_ARM_INTERRUPT+16
-    
     SUB   number_frames, number_frames, 1     // decrement loop counter
     ADD   frame_counter, frame_counter, 1     // increment frame counter
     QBEQ  DONE, number_frames, 0  // repeat loop unless zero
-    
     // number of frames completed FRAMES_PER_TRANSFER == 0? 
     MOV   var1, frame_counter.b0
     AND   var1, var1, (FRAMES_PER_TRANSFER - 1)
