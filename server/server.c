@@ -9,85 +9,60 @@
 #include <sys/types.h>
 #include <time.h> 
 
+#include <zmq.h>
+#include <assert.h>
+
+#include "server.h"
+
 #define BUFSIZE 1280 * 1024
 #define CLIENT_TRIGGER '1'
 #define CLIENT_EXIT '2'
 #define CLIENT_ACK '3'
 #define FRAME_HEADER 0x04
 
-// command codes for client to pass parameters
-#define CMD_THRESHOlD '5'
-#define CMD_NEXPOSURES '7'
-#define CMD_CONFIG '8'
-#define CMD_BOUND_LOWER '9'
-#define CMD_BOUND_UPPER 'a'
-#define CMD_GAIN 'b'
 
-
-int read_size = 30;
 int numFrames = 10;
-char sendBuff[BUFSIZE];
 
-typedef struct{
-    uint32_t threshold;
-    uint32_t nexposures;
-    uint32_t gain;
-    uint32_t configure;
-    uint32_t lower_bound;
-    uint32_t upper_bound;
-} clientCommands;
 
-int handle_msg(int connfd, char *msgBuffer);
-int send_int(int connfd, int *msgBuffer);
+int handle_msg(void *responder, char *msgBuffer);
+int send_int(void *responder, int *msgBuffer);
+int send_image(void *responder, uint8_t *imgBuffer);
+int recv_commands(void *responder, char *msgBuffer, clientCommands cmds);
 int trigger_exposure();
-int exposure();
-int mysend_image(int connfd);
-int recv_commands(int connfd, char *msgBuffer, clientCommands cmds);
+int exposure(uint8_t *sendBuff);
 
 
 int main(int argc, char *argv[])
 {
-    int listenfd = 0, connfd = 0;
-    struct sockaddr_in serv_addr; 
+    // struct to pass around commands for the cam driver
     clientCommands cmds;
 
+    uint8_t sendBuff[BUFSIZE];
     char msgBuffer[256];
-    time_t ticks; 
+    // time_t ticks; 
     ssize_t bytes_received;
 
-    listenfd = socket(AF_INET, SOCK_STREAM, 0);
-    memset(&serv_addr, '0', sizeof(serv_addr));
+    //  Socket to talk to clients
+    void *context = zmq_ctx_new ();
+    void *responder = zmq_socket (context, ZMQ_REP);
+    int rc = zmq_bind (responder, "tcp://*:5555");
+    assert (rc == 0);
+
     memset(sendBuff, '0', sizeof(sendBuff)); 
 
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(5001); 
+    // ticks = time(NULL);
 
-    bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)); 
-
-    listen(listenfd, 10); 
-
-    connfd = accept(listenfd, (struct sockaddr*)NULL, NULL); 
-    ticks = time(NULL);
-//    if ((bytes_received = handle_msg(connfd, msgBuffer)) <= 0) {
-//        exit(EXIT_FAILURE);
-//    }
-//    if (msgBuffer[0] == CLIENT_TRIGGER) {
-//        printf("triggered\n");
-//    } else {
-//        printf("unexpected code received\n");
-//    }
-
-    if (recv_commands(connfd, msgBuffer, cmds) < 0) {
+    // Get camera command parameters from client
+    if (recv_commands(responder, msgBuffer, cmds) < 0) {
         exit(EXIT_FAILURE);
     } else {
         printf("triggered\n");
     }
 
     // Send number of frames to client
-    send_int(connfd, &numFrames);
+    send_int(responder, &numFrames);
     // get response
-    if ((bytes_received = handle_msg(connfd, msgBuffer)) <= 0) {
+    if ((bytes_received = handle_msg(responder, msgBuffer)) < 0) {
         exit(EXIT_FAILURE);
     }
     if (msgBuffer[0] == CLIENT_ACK) {
@@ -96,13 +71,13 @@ int main(int argc, char *argv[])
         printf("unexpected code received\n");
     }
     trigger_exposure();
-    exposure();
+    exposure(sendBuff);
     // TODO: move above to for loop
     for (int i = 0; i < numFrames; i ++) {
-        if (mysend_image(connfd) < 0) {
+        if (send_image(responder, sendBuff) < 0) {
             exit(EXIT_FAILURE);
         }
-        if ((bytes_received = handle_msg(connfd, msgBuffer)) <= 0) {
+        if ((bytes_received = handle_msg(responder, msgBuffer)) < 0) {
             exit(EXIT_FAILURE);
         }
         if (msgBuffer[0] == CLIENT_ACK) {
@@ -112,79 +87,41 @@ int main(int argc, char *argv[])
             printf("unexpected code received\n");
         }
     }
-
-    close(connfd);
-    close(listenfd);
 }
 
 
-int handle_msg(int connfd, char *msgBuffer) {
-    // Expects a single-byte response from the client in the socket buffer
+int handle_msg(void *responder, char *msgBuffer) {
     // Returns the size of the message received (i.e., 1 on success)
     int bytes_received;
-    if ((bytes_received = recv(connfd, msgBuffer, 1, 0) ) <= 0) {
-        if (bytes_received == 0) {
-            printf("server: socket %d hung up\n", connfd);
-        } else {
-            perror("recv");
-        }
-        close(connfd);
-        return -1;
+    if ((bytes_received = zmq_recv(responder, msgBuffer, 1, 0) ) <= 0) {
+        perror("handle_msg");
+        return -1; 
     } else {
         // got some data from client
         return bytes_received;
     }
 }
 
-int recv_commands(int connfd, char *msgBuffer, clientCommands cmds) {
+int recv_commands(void *responder, char *msgBuffer, clientCommands cmds) {
     // Reads a sequence of single-byte commands (with variable-size payloads)
     // from the socket buffer and writes them into an instance of the
     // clientCommands struct
     // Returns 0 on success and -1 on failure
-    int bytes_received = 0;
-    int chunk_size = 0;
-    while (bytes_received < read_size) {
-        if ((chunk_size = recv(connfd, &msgBuffer[bytes_received], read_size - bytes_received, 0) ) <= 0) {
-            if (chunk_size == 0) {
-                printf("server: socket %d hung up\n", connfd);
-            } else {
-                perror("recv");
-            }
-            close(connfd);
-            return -1;
-        } else {
-            // got some data from client
-            bytes_received += chunk_size;
-            if (bytes_received > read_size) {
-                printf("recv_commands: read more characters than expected");
-            }
-        }
-    }
-    // pack the commands into cmds
-    int parsed_size = 0;
-    while (parsed_size < read_size) {
-        char cmd = msgBuffer[parsed_size];
-        switch(cmd) {
-            case CMD_THRESHOlD:
-                cmds.threshold = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            case CMD_NEXPOSURES:
-                cmds.nexposures = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            case CMD_CONFIG:
-                cmds.configure = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            case CMD_BOUND_LOWER:
-                cmds.lower_bound = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            case CMD_BOUND_UPPER:
-                cmds.upper_bound = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            case CMD_GAIN:
-                cmds.gain = ((uint32_t) (msgBuffer[parsed_size + 1]));
-            default:
-                printf("unexpected command\n");
-        }
-        printf("%c\n", msgBuffer);
-        printf("%u\n", (uint32_t) (&msgBuffer[parsed_size + 1]));
-        parsed_size += 5;
-    }
-    return 0;
+    // Receive from socket into msgBuffer
+    int bytes_received = zmq_recv(responder, msgBuffer, sizeof(msgBuffer), 0);
+    if (bytes_received < 0) {
+        perror("recv_commands");
+        return -1;
+    } 
+    memcpy(&cmds, msgBuffer, sizeof(msgBuffer));
+    printf("%d\n", cmds.threshold);
+    printf("%d\n", cmds.nexposures);
+    printf("%d\n", cmds.configure);
+    printf("%d\n", cmds.lower_bound);
+    printf("%d\n", cmds.upper_bound);
+    printf("%d\n", cmds.gain);
+    printf("%d bytes received\n", bytes_received);
+    return bytes_received;
 }
 
 int trigger_exposure() {
@@ -192,7 +129,7 @@ int trigger_exposure() {
 }
 
 // 
-int exposure() {
+int exposure(uint8_t *sendBuff) {
     FILE *f;
     f = fopen("ceil.7.28sum.dat", "rb");
     if (f) {
@@ -204,30 +141,22 @@ int exposure() {
     return 0;
 }
 
-int mysend_image(int connfd) {
-    int totalsent = 0;
-    int sent;
-    while (totalsent < BUFSIZE) {
-        if ((sent = send(connfd, sendBuff, sizeof(sendBuff), 0)) == 0) {
-            perror("socket connection broken on send attempt");
-            close(connfd);
-            return -1;
-        }
-        totalsent += sent;
+int send_image(void *responder, uint8_t *imgBuffer) {
+    int totalsent;
+    if ((totalsent = zmq_send(responder, imgBuffer, sizeof(imgBuffer), 0)) <= 0) {
+        perror("send_image");
+        return -1;
+    } else {
+        return totalsent;
     }
-    return 0;
 }
 
-int send_int(int connfd, int *msgBuffer) {
-    int totalsent = 0;
-    int sent;
-    while (totalsent < sizeof(int)) {
-        if ((sent = send(connfd, msgBuffer, sizeof(int), 0)) <= 0) {
-            perror("socket connection broken on send attempt");
-            close(connfd);
-            return -1;
-        }
-        totalsent += sent;
+int send_int(void *responder, int *msgBuffer) {
+    int totalsent;
+    if ((totalsent = zmq_send(responder, msgBuffer, sizeof(int), 0)) <= 0) {
+        perror("send_int");
+        return -1;
+    } else {
+        return totalsent;
     }
-    return 0;
 }
