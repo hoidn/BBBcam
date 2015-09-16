@@ -56,14 +56,21 @@ int main(int argc, char *argv[])
     send_commands(requester, msgBuffer, cmds);
 
     // Get number of frames from server
-    recv_generic(requester, &numFrames, 4);
+    if (recv_generic(requester, &numFrames, 4) < 0) {
+        exit(EXIT_FAILURE);
+    } else {
+        printf("Number of frames: %d\n", numFrames);
+    }
+    
 
     msgBuffer[0] = CLIENT_ACK;
     send_generic(requester, msgBuffer, 1);
     for (int i = 0; i < numFrames; i ++) {
         recv_generic(requester, recvBuff, BUFSIZE);
         msgBuffer[0] = CLIENT_ACK;
-        send_generic(requester, msgBuffer, 1);
+        if (send_generic(requester, msgBuffer, 1) < 0) {
+            exit(EXIT_FAILURE);
+        }
     }
     zmq_close (requester);
     zmq_ctx_destroy (context);
@@ -77,6 +84,7 @@ int recv_generic(void *requester, void *msgBuffer, int size) {
         perror("recv_int");
         return -1;
     } else {
+        printf("received %d bytes\n", bytes_received);
         return bytes_received;
     }
 }

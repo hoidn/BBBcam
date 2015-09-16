@@ -26,7 +26,7 @@ int numFrames = 10;
 
 int handle_msg(void *responder, char *msgBuffer);
 int send_int(void *responder, int *msgBuffer);
-int send_image(void *responder, uint8_t *imgBuffer);
+int send_image(void *responder, uint8_t *imgBuffer, int size);
 int recv_commands(void *responder, char *msgBuffer, clientCommands cmds);
 int trigger_exposure();
 int exposure(uint8_t *sendBuff);
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     int rc = zmq_bind (responder, "tcp://*:5555");
     assert (rc == 0);
 
-    memset(sendBuff, '0', sizeof(sendBuff)); 
+    memset(sendBuff, '0', BUFSIZE); 
 
     // ticks = time(NULL);
 
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     exposure(sendBuff);
     // TODO: move above to for loop
     for (int i = 0; i < numFrames; i ++) {
-        if (send_image(responder, sendBuff) < 0) {
+        if (send_image(responder, sendBuff, sizeof(sendBuff)) < 0) {
             exit(EXIT_FAILURE);
         }
         if ((bytes_received = handle_msg(responder, msgBuffer)) < 0) {
@@ -87,6 +87,8 @@ int main(int argc, char *argv[])
             printf("unexpected code received\n");
         }
     }
+    zmq_close (responder);
+    zmq_ctx_destroy (context);
 }
 
 
@@ -108,12 +110,13 @@ int recv_commands(void *responder, char *msgBuffer, clientCommands cmds) {
     // clientCommands struct
     // Returns 0 on success and -1 on failure
     // Receive from socket into msgBuffer
-    int bytes_received = zmq_recv(responder, msgBuffer, sizeof(msgBuffer), 0);
+    // printf("size of msgBuffer: %d\n", sizeof(cmds));
+    int bytes_received = zmq_recv(responder, msgBuffer, sizeof(cmds), 0);
     if (bytes_received < 0) {
         perror("recv_commands");
         return -1;
     } 
-    memcpy(&cmds, msgBuffer, sizeof(msgBuffer));
+    memcpy(&cmds, msgBuffer, sizeof(cmds));
     printf("%d\n", cmds.threshold);
     printf("%d\n", cmds.nexposures);
     printf("%d\n", cmds.configure);
@@ -141,12 +144,13 @@ int exposure(uint8_t *sendBuff) {
     return 0;
 }
 
-int send_image(void *responder, uint8_t *imgBuffer) {
+int send_image(void *responder, uint8_t *imgBuffer, int size) {
     int totalsent;
-    if ((totalsent = zmq_send(responder, imgBuffer, sizeof(imgBuffer), 0)) <= 0) {
+    if ((totalsent = zmq_send(responder, imgBuffer, size, 0)) <= 0) {
         perror("send_image");
         return -1;
     } else {
+        printf("size sent: %d\n", totalsent);
         return totalsent;
     }
 }
