@@ -81,7 +81,7 @@ void write16(uint8_t regAddr, uint16_t value) {
 // of i2cget seems to misbehave
 // regAddr: a hex string denoting a register address
 // preforms endianness conversion
-uint16_t read16(char *regAddr, const char *dev_addr) {
+uint16_t read16(uint8_t regAddr, uint8_t dev_addr) {
     char cmd[100] = {0};
     //char regStr[10] = {0};
     char result[10] = {0};
@@ -89,12 +89,8 @@ uint16_t read16(char *regAddr, const char *dev_addr) {
     uint16_t result_int;
     FILE *fp; 
 
-    strcpy(cmd, "sudo i2cget -y 1 ");
-    strcpy(cmd, dev_addr);
-    strcpy(cmd, " ");
-    // 0x5d ");
-    strcat(cmd, regAddr);
-    strcat(cmd, " w");
+    snprintf(cmd, sizeof(cmd), "%s 0x%02x 0x%02x w", "sudo i2cget -y 1 ",
+        dev_addr, regAddr);
 
     fp = popen(cmd, "r");
     if (fp == NULL) {

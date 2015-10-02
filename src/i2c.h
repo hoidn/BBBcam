@@ -16,7 +16,7 @@ typedef struct addr_val {
 int delay_ms(unsigned int msec);
 void sensors_ADC_init(uint16_t addr);  
 void write16(uint8_t regAddr, uint16_t value); 
-uint16_t read16(char *regAddr, const char *dev_addr);  
+uint16_t read16(uint8_t regAddr, uint8_t dev_addr);
 int delay_ms(unsigned int msec);
 int i2c_writeArr(AddrVal *regStructArr);
 

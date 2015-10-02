@@ -100,8 +100,7 @@ int config_pru(int initial_config, uint32_t numFrames) {
         }
     }
     // init i2c comm
-    printf("\tINFO: performed sensor initial configuration\r\n");
-    printf("configuring pru\n");
+    printf("\tINFO: performed sensor initial configuration. Configuring PRU.\r\n");
     tpruss_intc_initdata pruss_intc_initdata = PRUSS_INTC_INITDATA;
     /* Initialize the PRU */
     prussdrv_init ();

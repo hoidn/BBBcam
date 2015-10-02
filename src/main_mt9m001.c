@@ -195,7 +195,7 @@ int main (int argc, char **argv)
     errno = 0;
 
     // handle command line arguments
-    if (argc < 2 || argc > 10) {
+    if (argc < 2 || argc > 12) {
         usage(argv[0]);
         return -1;
     }

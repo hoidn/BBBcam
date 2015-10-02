@@ -32,7 +32,7 @@ int set_camera_lock() {
 }
 
 int check_gain() {
-    return read16(MT9M001_GLOBAL_GAIN_STR, MT9M001_ADDR_STR);
+    return read16(MT9M001_GLOBAL_GAIN, MT9M001_ADDR);
 }
 
 // initialize i2c interface and configure sensor fr single capture mode
