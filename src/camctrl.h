@@ -20,4 +20,5 @@ void pru_exit(void);
 void pru_start(void);
 int config_pru(int initial_config, uint32_t numFrames);
 void wait_pru1_complete(void);
+void send_pru_ready_signal();
 #endif

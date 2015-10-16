@@ -154,7 +154,7 @@ extern char i2c_comm_buf[10];
 static uint8_t checkerboardEvenAverage = 0;
 static uint8_t checkerboardOddAverage = 0;
 
-uint8_t *tFrame; // array to hold transposed frame
+//uint8_t *tFrame; // array to hold transposed frame
 // Frame buffer and various other buffers used for analysis during readout
 uint8_t *frame; // frame buffer
 //uint8_t *frameAvg; // average of all the frames
@@ -210,10 +210,10 @@ int main (int argc, char **argv)
 
     if (argc > 2) {
         for (int i = 2; i < argc; i ++) {
-            if (i + 2 > argc) {
-                usage(argv[0]);
-                exit(1);
-            }
+//            if (i + 2 > argc) {
+//                usage(argv[0]);
+//                exit(1);
+//            }
             if (strcmp(argv[i], "-o") == 0) {
                 i ++;
                 fname = argv[i];
@@ -259,26 +259,6 @@ int main (int argc, char **argv)
             }
         }
     }
-
-    if ((configure == 1) || (!check_camera_running())) {
-        config_pru(1, numFrames);
-        if (!check_camera_running()) {
-            set_camera_lock();
-        }
-    } else {
-        config_pru(0, numFrames);
-    }
-    // only initialize the gain value if necessary
-    // TODO: There's a possibly problematic assumption here that, if the gain 
-    // is set, so are all the other register parameters.
-    if (gain != 0) {
-        if (gain != check_gain()) {
-            mt9m001_init_readout(gain);
-        }
-        delay_ms(100);
-    }
-
-
     // allocate memory
     frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
     // TODO: this will break if FRAMES_PER_TRANSFER != 1
@@ -286,13 +266,34 @@ int main (int argc, char **argv)
     isolatedHisto = calloc(MAXVALUE, sizeof(uint32_t));
     pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
     frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
-    //frameAvg = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH / 4, sizeof(uint32_t));
     isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
     // frame to hold transposed arrays
-    tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
+    //tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
 
-    pru_start();
+    if ((configure == 1) || (!check_camera_running())) {
+        config_pru(1, numFrames);
+        pru_start();
+        // Wait for sensor to initialize before starting i2c communication
+        delay_ms(999);
+        if (!check_camera_running()) {
+            set_camera_lock();
+        }
+    } else {
+        config_pru(0, numFrames);
+        pru_start();
+    }
+    // only initialize the gain value if necessary
+    // TODO: There's a possibly problematic assumption here that, if the gain 
+    // is set, so are all the other register parameters.
+    if (gain != 0) {
+        if (configure && (gain != check_gain())) {
+            mt9m001_init_readout(gain);
+        }
+        delay_ms(100);
+    }
 
+    // trigger readout
+    send_pru_ready_signal();
     // Read out the frames
     for (int i = 0; i < numFrames; i ++) {
         // capture a frame and place it in the frame buffer

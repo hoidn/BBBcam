@@ -63,6 +63,12 @@
 
 #include "pru.hp"
 
+#define DELAY_MSECONDS 1000 // adjust this to experiment
+#define CLOCK 200000 // PRU is always clocked at 200MHz
+#define CLOCKS_PER_LOOP 6 // loop contains two instructions, one clock each
+#define DELAY_2 (DELAY_MSECONDS * CLOCK / CLOCKS_PER_LOOP)
+
+
 MEMACCESS_DDR_PRUSHAREDRAM:
 
     // Enable OCP master port
@@ -83,12 +89,6 @@ MEMACCESS_DDR_PRUSHAREDRAM:
     ST32      r0, r1
 
 START:
-
-
-
-
-
-
 
 .macro  onepix_9_2
 .mparam dst
@@ -139,25 +139,30 @@ END_ONEPIX_7_0:
 .endm
 
 INIT:
-        //set PRUCFG.SPP.XFR_SHIFT_EN=1
-        LBCO r0, CONST_PRUCFG, 0x34, 4
-        SET r0, 1
-        SBCO r0, CONST_PRUCFG, 0x34, 4
+    //set PRUCFG.SPP.XFR_SHIFT_EN=1
+    LBCO r0, CONST_PRUCFG, 0x34, 4
+    SET r0, 1
+    SBCO r0, CONST_PRUCFG, 0x34, 4
 
 
 
-        //MOV reads_left, NUMCHUNKS
-        MOV r0, 0
-        MOV     transfer_ready, 1
-        // TODO: inconsistency with number_frames between pru0 and pru1
-        //FOR FLUSHING OPEERATION MODE
-        //MOV number_frames, (NUMFRAMES + NUMFRAMES/FRAMES_PER_TRANSFER)
-        //MOV number_frames, NUMFRAMES 
+    //MOV reads_left, NUMCHUNKS
+    MOV r0, 0
+    MOV     transfer_ready, 1
 
-        // initialize number_frames from the value written to DDR by host
-        INIT_NUM_FRAMES
+    // initialize number_frames from the value written to DDR by host
+    INIT_NUM_FRAMES
 
-        MOV frame_counter, 0
+    MOV frame_counter, 0
+
+    // Check initial_config parameter from host side
+HOST_TRIGGER:
+    CLR SYSCLK // clock edge
+    NOP
+    NOP
+    SET SYSCLK
+    host_trigger r1
+    QBEQ HOST_TRIGGER, r1, 0
 
 FLUSH:
     // wait until FV == 0 in case we need to flush out an old frame
@@ -266,6 +271,7 @@ SKIPSTONE_2:
     onepix_8_1  r24.b3
 
 
+// Can't jump by more than 255 words at once, hence this:
 QBA SKIPSTONE
 READFRAME_STEPPINGSTONE:
     QBA READFRAME_STEPPINGSTONE_2
@@ -273,33 +279,22 @@ READLINE_STEPPINGSTONE:
     QBA READLINE_STEPPINGSTONE_2
 SKIPSTONE:
 
-
-
 ACKCHECK:
-//        NOP
-        // check for ACK for previous read from pru0
-        LBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
-//        NOP
-        QBNE    ACKCHECK, pr0ack, 1
+    // check for ACK for previous read from pru0 
+    LBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
+    QBNE    ACKCHECK, pr0ack, 1
 
-
-        // reset ack from pru0 
-        // TODO combine this with the next SBCO
-        MOV     pr0ack, 0
-        SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
-
+    // reset ack from pru0 
+    MOV     pr0ack, 0
+    SBCO    pr0ack, CONST_PRUSHAREDRAM, 0, 4
 
     // recall transfer_ready is r8 and always == 1
     // simultaneously copy data and set transfer_ready field in pru memory to 1
     XOUT    10, data_start, CHUNKSIZE
     SBCO    transfer_ready, CONST_PRUSHAREDRAM, 4, 4
 
-    // decrement remaining number of chunks to read
-    //SUB reads_left, reads_left, 1 
-
 WAIT_LV:
     // continue in the same line if LV == 1
-    // TODO: intermmediate variable necessary?
     CLR  SYSCLK // falling clock edge
     NOP
     NOP
@@ -308,7 +303,6 @@ WAIT_LV:
     QBBS    READLINE_STEPPINGSTONE, var1, LV_N
 
     // otherwise return to polling FV, unless this was the last line
-    //QBNE READFRAME, reads_left, 0
     CLR  SYSCLK // falling clock edge
     NOP
     NOP
@@ -326,7 +320,7 @@ REPEAT: // however many more frames are specified
 
     // done with one frame
     // Notify pru0 of completion
-    LDI    R31, PRU1_PRU0_INTERRUPT + 16 
+    LDI    R31, PRU1_PRU0_INTERRUPT + 16
 
     QBNE    READFRAME_STEPPINGSTONE, number_frames, 0  // repeat loop unless zero
 
@@ -334,14 +328,8 @@ REPEAT: // however many more frames are specified
     // Send notification to Host for program completion
     MOV       r31.b0, PRU1_ARM_INTERRUPT+16
 
-// if you don't do this i2c writes fail the next time the program is run
+// Continue providing a clock (necessary for i2c comm outside of this program)
 CLKEND: // provide a clock indefinately
-    // TESTING
-//    MOV r1, ARM_PRU_ACK_OFFSET
-//    LBBO    var1, r1, 0, 4
-//
-//    MOV var1, 10
-//    SBBO    var1, r1, 0, 4
 
     CLR  SYSCLK // falling clock edge
     NOP

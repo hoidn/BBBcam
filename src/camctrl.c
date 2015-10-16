@@ -26,6 +26,9 @@
 
 // offset in pru mem to pass number of frames parameter 
 #define NUMFRAMES_PRU_WORD_OFFSET 2
+// offset in pru mem to pass config command
+// #define CONFIG_PRU_WORD_OFFSET 3
+#define PRU_READY_WORD_OFFSET 3
 
 #define DDR_BASEADDR     0x80000000
 
@@ -35,11 +38,14 @@
 // uint32_t offset in ddr for ack signal from pru
 #define DDR_NUMFRAMES_OFFSET 1 
 
+#define PRU_READY 0xef
+#define PRU_NOT_READY 0x0
+
 //to compensate for mmap bug
 #define DDR_OFFSET_0	    0x10000000 
 
 // allow some space for non-pixel data at beginning of shared ddr
-#define DDR_DATA_OFFSET 8
+#define DDR_DATA_OFFSET 20
 
 //equivalent with 0x00002000
 #define OFFSET_SHAREDRAM 0		
@@ -49,9 +55,6 @@
 
 // offset for pixel data in ddr
 #define OFFSET_DDR (DDR_OFFSET_0 + DDR_DATA_OFFSET) 
-
-#define FILESIZE_BYTES (MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH  * FRAMES_PER_TRANSFER)
-
 
 // PRU-shared values to keep track of read status in exposure()
 #define READ_VALID 1
@@ -93,7 +96,7 @@ void exposure(uint8_t *frameptr, int framesize) {
 int config_pru(int initial_config, uint32_t numFrames) {
     unsigned int ret;
     if (initial_config) {
-        if (system("sudo scripts/pinmux_config") == -1) {
+        if (system("sudo scripts/pinmux_config.sh") == -1) {
             printf("Pinmux configuration failed\n");
         } else {
             printf("Configured pinmux\n");
@@ -131,17 +134,40 @@ int config_pru(int initial_config, uint32_t numFrames) {
     // DDR_physical address into pru mem (NOT shared ddr).
     sendDDRbase();
     
+    // Send number of frames to PRUs
     prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
     prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, NUMFRAMES_PRU_WORD_OFFSET, (const unsigned int *) &numFrames, 4);
 
+    // Send initial_config value to PRUs
+//    prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, CONFIG_PRU_WORD_OFFSET, (const  unsigned int *) &initial_config, 4);
+//    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, CONFIG_PRU_WORD_OFFSET, (const  unsigned int *) &initial_config, 4);
+
+    uint32_t not_ready = PRU_NOT_READY;
+    // Signal not ready status to PRU1
+    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, PRU_READY_WORD_OFFSET, (const  unsigned int *) &not_ready, 4);
+    prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, PRU_READY_WORD_OFFSET, (const  unsigned int *) &not_ready, 4);
+
+
+/*
     if (initial_config) {
         prussdrv_exec_program (PRU_NUM0, "./oe_pru0.bin"); // set OE low
         prussdrv_exec_program (PRU_NUM1, "./pru1clk.bin"); // start running clock
         delay_ms(999);
         printf("running the clock\n");
     }
+*/
+
     return 0;
 }
+
+// Signal to the pru that it can begin reading out data
+void send_pru_ready_signal() {
+    uint32_t ready = PRU_READY;
+    // Signal not ready status to PRU1
+    prussdrv_pru_write_memory(PRUSS0_PRU1_DATARAM, PRU_READY_WORD_OFFSET, (const  unsigned int *) &ready, 4);
+    prussdrv_pru_write_memory(PRUSS0_PRU0_DATARAM, PRU_READY_WORD_OFFSET, (const  unsigned int *) &ready, 4);
+}
+
 
 
 void wait_pru1_complete(void) {
