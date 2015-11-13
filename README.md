@@ -3,7 +3,7 @@
 #### OS/boot setup
 
 Plug Beaglebone Black into PC and wait for the SD card's boot partition to mount (most recent version of the Beaglebone Black seems to be configured with higher boot priority for microSD compared to eMMC).
-edit /boot/uEnv.txt to disable eMMC and HDMI if necessary. Check if they're enabled with: 
+Edit /boot/uEnv.txt to disable eMMC and HDMI if necessary. Verify that those overlays are disabled with: 
 ```sh
 cat /sys/devices/bone_capemgr.*/slots
 ```
@@ -18,6 +18,7 @@ route add default gw 192.168.7.1
 
 If the host is running GNU/Linux, follow the additional instructions here:
 https://elementztechblog.wordpress.com/2014/12/22/sharing-internet-using-network-over-usb-in-beaglebone-black/
+
 For Windows, see the following video:
 https://www.youtube.com/watch?v=fzRVVtGNfj8
 
