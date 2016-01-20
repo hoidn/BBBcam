@@ -72,7 +72,7 @@
 #define ARM_PRU0_INTERRUPT      21
 #define ARM_PRU1_INTERRUPT      22
 
-#define CONST_PRUCFG         C4
+#define CONST_PRUCFG	     C4
 #define CONST_PRUDRAM        C24
 #define CONST_PRUSHAREDRAM   C28
 #define CONST_DDR            C31
@@ -121,41 +121,32 @@
 #define ARM_PRU_ACK_OFFSET 4
 #define ARM_PRU_ACK 1
 #define ARM_PRU_NACK 0
-
 #define FRAMES_PER_TRANSFER 1 // number of frames at a time for arm to copy
-#define THRESHOLD 26
-#define DIAG_CORRECTION 8
+#define DIAG_CORRECTION 0
 
 #define DDR_OFFSET 8 // offset to data region in ddr
 #define NUM_FRAMES_OFFSET 8 // offset to field in local pru mem from which to initialize number_frames
-// byte location in pru data ram location for encoded data. Initialize encoding_dst to this
-#define ENCODING_PRUMEM_BASE 4 
-#define DDR_READSIZE_OFFSET 4
 
-
-//free regs:  
 // counter to keep track of even and odd indices. initialized to 0, 
 // increments by 1 every chunk (assumed to be 64 bytes) and resets
 // to 0 once it reaches 40 = 0x28 (equivalent to two rows)
-#define diag_counter r6 
-#define diag_state r26 // to store difference between ddr_pointer and ddr base address
+#define diag_counter r6
+// to store difference between ddr_pointer and ddr base address
+#define diag_state r26
 
+//#define read_pr0 r1
+#define chunk_size r2
 #define ddr_base r3
+#define out_offset r4
+#define gpi_read r5 //no longer being used
 #define pr0ack r7
 #define transfer_ready r8
 #define data_start r9
-#define number_frames r25 // complement of frame_counter
+#define number_frames r25
 
-// regs to store state of run length encoding
-#define encoding_dst r5
-// this HAS to be r0 since that is the reg reserved for register count mode
-// in the load/store instructions
-#define encoded_size r0 
-#define runlen_status r2
-#define runlen_counter r4
-
+#define ddr_counter r26 // to store difference between ddr_pointer and ddr base address
 #define ddr_pointer r27
-#define frame_counter r28 // complement of number_frames
+#define frame_counter r28
 #define var1 r29
 
 .macro  LD32
