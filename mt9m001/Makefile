@@ -25,7 +25,7 @@ pru1.bin: assembly/pru1.p
 	#./pasm81_exec -b $^
 	pasm -V3 -b $^
 
-pru1clk.bin: assembly/pru1clk.p
+pru1clk.bin: assembly/other/pru1clk.p
 	#./pasm81_exec -b $^
 	pasm -V3 -b $^
 
@@ -33,7 +33,7 @@ pru0.bin: assembly/pru0.p
 	#./pasm81_exec -b $^
 	pasm -V3 -b $^
 
-oe_pru0.bin: assembly/oe_pru0.p
+oe_pru0.bin: assembly/other/oe_pru0.p
 	pasm -V3 -b $^
 
 
