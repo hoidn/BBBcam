@@ -1,5 +1,5 @@
 /****************************************
- * Program for Aptina MT9M001
+ * Program for Aptina imx291
  * CMOS camera
  ****************************************/
 
@@ -35,13 +35,13 @@
 const unsigned char params_1280x1024[]={
     //wait for 1 sec TODO: is this necessary? 
     //wait(970000);
-    MT9M001_RESET, 0x0000,//finish reset
-    MT9M001_OUTPUT_CONTROL, 0x0003,//enable editing of reg values
-    MT9M001_READ_OPTIONS1, 0x8100,//enable snapshot mode 
-    //MT9M001_SHUTTER_WIDTH, exposure,//reduce exposure time (default: 0x0419)
-    //MT9M001_GLOBAL_GAIN, gain,//reduce gain (default: 0x0008)
-    MT9M001_BLACK_LEVEL, 0x049a,//disable black level correction
-    MT9M001_OUTPUT_CONTROL, 0x0002,//finish editing regs
+    imx291_RESET, 0x0000,//finish reset
+    imx291_OUTPUT_CONTROL, 0x0003,//enable editing of reg values
+    imx291_READ_OPTIONS1, 0x8100,//enable snapshot mode 
+    //imx291_SHUTTER_WIDTH, exposure,//reduce exposure time (default: 0x0419)
+    //imx291_GLOBAL_GAIN, gain,//reduce gain (default: 0x0008)
+    imx291_BLACK_LEVEL, 0x049a,//disable black level correction
+    imx291_OUTPUT_CONTROL, 0x0002,//finish editing regs
     //wait for 1 sec TODO: is this necessary
     //wait(1200000);
     0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
@@ -73,7 +73,7 @@ unsigned char cam_reg_read(unsigned char addr, unsigned char reg)
 void cam_id_dump(void)
 {
     unsigned char val;
-    val=cam_reg_read(CAM_ADDR, MT9M001_CHIP_VERSION);
+    val=cam_reg_read(CAM_ADDR, imx291_CHIP_VERSION);
     printf("chip version= 0x%02x\n", val);
 //    val=cam_reg_read(CAM_ADDR, OV9655_MIDL);
 //    printf("Mnfr ID2= 0x%02x\n", val);
@@ -95,7 +95,7 @@ cam_init(void)
     // do a reset
 
   // reset the sensor
-  pair[0]=MT9M001_RESET; pair[1]=0x0001;
+  pair[0]=imx291_RESET; pair[1]=0x0001;
   i2c_write(i2ch, CAM_ADDR, pair, 2);
   delay_ms(999);
     
@@ -145,7 +145,7 @@ int cam_trigger() {
     i2ch=i2c_open(I2CBUS, CAM_ADDR);
     
     // trigger an exposure
-    pair[0]=MT9M001_FRAME_RESTART; pair[1]=0x0001;
+    pair[0]=imx291_FRAME_RESTART; pair[1]=0x0001;
     i2c_write(i2ch, CAM_ADDR, pair, 2);
   
     cam_id_dump();

@@ -8,11 +8,11 @@
 // Register values for continuous capture mode used by imx291_init_readout
 // to initialize the sensor.
 AddrVal params_1280x1024_continuous[] = {
-    //MT9M001_READ_OPTIONS1, 0x8100,//enable snapshot mode 
-    //MT9M001_SHUTTER_WIDTH, 0x0800, // shutter width
-    MT9M001_BLACK_LEVEL, 0x049a, //disable black level correction
-    MT9M001_GLOBAL_GAIN, 0x000f, //set gain to 0xf
-    //MT9M001_OUTPUT_CONTROL, (1 << 6),//test data
+    //imx291_READ_OPTIONS1, 0x8100,//enable snapshot mode 
+    //imx291_SHUTTER_WIDTH, 0x0800, // shutter width
+    imx291_BLACK_LEVEL, 0x049a, //disable black level correction
+    imx291_GLOBAL_GAIN, 0x000f, //set gain to 0xf
+    //imx291_OUTPUT_CONTROL, (1 << 6),//test data
     0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
 };
 
@@ -32,14 +32,14 @@ int set_camera_lock() {
 }
 
 int check_gain() {
-    return read16(MT9M001_GLOBAL_GAIN, MT9M001_ADDR);
+    return read16(imx291_GLOBAL_GAIN, imx291_ADDR);
 }
 
 // initialize i2c interface and configure sensor fr single capture mode
 void imx291_init_readout(uint16_t gain) {
     params_1280x1024_continuous[1].val = gain;
     printf("    INFO: configuring i2c device registers\n");
-    sensors_ADC_init(MT9M001_ADDR);
+    sensors_ADC_init(imx291_ADDR);
     imx291_reset();
     imx291_i2c_writeArr(params_1280x1024_continuous);
     //init_readout(addrval_ptr);
@@ -47,20 +47,20 @@ void imx291_init_readout(uint16_t gain) {
 
 // reset the sensor
 static void imx291_reset(void) {
-    write16(MT9M001_RESET, 0x0001);
+    write16(imx291_RESET, 0x0001);
     delay_ms(10);
     delay_ms(999);
-    write16(MT9M001_RESET, 0x0000);
+    write16(imx291_RESET, 0x0000);
     delay_ms(10);
 }
 
 // Configure sensor registers
 static int imx291_i2c_writeArr(AddrVal *regStructArr) {
     int retval;
-    write16(MT9M001_OUTPUT_CONTROL, 0x0003);//enable editing of reg values
+    write16(imx291_OUTPUT_CONTROL, 0x0003);//enable editing of reg values
     delay_ms(10);
     retval = i2c_writeArr(regStructArr);
-    write16(MT9M001_OUTPUT_CONTROL, 0x0002);//finish editing regs
+    write16(imx291_OUTPUT_CONTROL, 0x0002);//finish editing regs
     delay_ms(10);
     return retval;
 }

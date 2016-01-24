@@ -50,7 +50,7 @@ main_imx291.o:
 	gcc  -O3 -g -Wall -std=c99 -o $(OBJDIR)/main_imx291.o -c src/main_imx291.c
 
 
-#$(OBJDIR)/%.o: %.c $(DEPS) MT9M001_i2c.o
+#$(OBJDIR)/%.o: %.c $(DEPS) imx291_i2c.o
 #	@mkdir -p obj
 #	$(CROSS_COMPILE)gcc $(CFLAGS) -c -o $@ $<
 

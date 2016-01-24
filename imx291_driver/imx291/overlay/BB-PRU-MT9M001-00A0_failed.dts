@@ -7,7 +7,7 @@
 
 /{
     compatible = "ti,beaglebone", "ti,beaglebone-black";
-    part_number = "BB-PRU-MT9M001";
+    part_number = "BB-PRU-imx291";
 
     exclusive-use =
         "P8.27",

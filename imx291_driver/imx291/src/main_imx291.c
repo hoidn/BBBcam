@@ -96,11 +96,11 @@
 
 #define DIAG_CORRECTION (256 - 8)
 // 1024 or 1280 depending on orientation
-#define HISTOGRAM_LENGTH MT9M001_MAX_WIDTH 
+#define HISTOGRAM_LENGTH imx291_MAX_WIDTH 
 // buffer size for file name strings
 #define BUFSIZE 256 
 
-//#define FRAMESIZE (MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT)
+//#define FRAMESIZE (imx291_MAX_WIDTH * imx291_MAX_HEIGHT)
 
 /******************************************************************************
 * Local Typedef Declarations                                                  *
@@ -260,15 +260,15 @@ int main (int argc, char **argv)
         }
     }
     // allocate memory
-    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
+    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * imx291_MAX_HEIGHT * imx291_MAX_WIDTH);
     // TODO: this will break if FRAMES_PER_TRANSFER != 1
-    isolatedEventsBuffer = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint8_t));
+    isolatedEventsBuffer = calloc(imx291_MAX_HEIGHT * imx291_MAX_WIDTH, sizeof(uint8_t));
     isolatedHisto = calloc(MAXVALUE, sizeof(uint32_t));
     pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
-    frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
+    frameSum = calloc(imx291_MAX_HEIGHT * imx291_MAX_WIDTH, sizeof(uint32_t));
     isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
     // frame to hold transposed arrays
-    //tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
+    //tFrame = malloc(imx291_MAX_HEIGHT * imx291_MAX_WIDTH * sizeof(uint32_t));
 
     if ((configure == 1) || (!check_camera_running())) {
         config_pru(1, numFrames);
@@ -299,11 +299,11 @@ int main (int argc, char **argv)
         // capture a frame and place it in the frame buffer
         if (i == 0) {
             // initialize the timer after the readout if this is the "flush" frame
-            exposure(frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
+            exposure(frame, imx291_MAX_WIDTH * imx291_MAX_HEIGHT);
         } else if (i == numFrames - 1) {
-            exposure(frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
+            exposure(frame, imx291_MAX_WIDTH * imx291_MAX_HEIGHT);
         } else {
-            exposure(frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
+            exposure(frame, imx291_MAX_WIDTH * imx291_MAX_HEIGHT);
         }
 
         if (i > 0) { // throw out i = 0
@@ -322,19 +322,19 @@ int main (int argc, char **argv)
 
 
 //    // calculate average
-//    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-//        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-//            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/((numFrames - 1) * FRAMES_PER_TRANSFER));
+//    for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+//        for (int j = 0; j < imx291_MAX_WIDTH; j ++) {
+//            frameAvg[i * imx291_MAX_WIDTH + j] = (uint8_t) (frameSum[i * imx291_MAX_WIDTH + j]/((numFrames - 1) * FRAMES_PER_TRANSFER));
 //        }
 //    }
 
 
     // Write stuff to file
-    exposureWrite32(concatStr(fname, "test.dat"), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
+    exposureWrite32(concatStr(fname, "test.dat"), (uint32_t *) frame, imx291_MAX_WIDTH * imx291_MAX_HEIGHT / 4);
     exposureWrite32(concatStr(fname, "singles.dat"), (uint32_t *) isolatedHisto, MAXVALUE);
     exposureWrite32(concatStr(fname, "pixels.dat"), (uint32_t *) pixelsHisto, MAXVALUE);
-    exposureWrite32(concatStr(fname, "sum.dat"),  frameSum, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
-    //exposureWrite32(concatStr(fname, "average.dat"), (uint32_t *) frameAvg, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT/4);
+    exposureWrite32(concatStr(fname, "sum.dat"),  frameSum, imx291_MAX_WIDTH * imx291_MAX_HEIGHT);
+    //exposureWrite32(concatStr(fname, "average.dat"), (uint32_t *) frameAvg, imx291_MAX_WIDTH * imx291_MAX_HEIGHT/4);
     exposureWrite32(concatStr(fname, "2dhisto.dat"), (uint32_t *) isolated2DHistogram, MAXVALUE * HISTOGRAM_LENGTH);
 
     pru_exit();
@@ -378,19 +378,19 @@ static void exposureWrite32(char *fname, uint32_t *arr, int arrSize) {
 void makeHistogramsAndSum(int bgSubtract, int indx) {
     uint8_t bottom, top, left, right, center, corrected_threshold;
     uint8_t diag_correction = (uint8_t) -DIAG_CORRECTION;
-    uint8_t *src = frame + indx * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH;
+    uint8_t *src = frame + indx * imx291_MAX_HEIGHT * imx291_MAX_WIDTH;
 
     // subtraction of dark level and systmatic row-to-row and checkerboard variation
     conditionFrame(src, bgSubtract);
 
     // initialize to 0 the array that will hold isolated events
-    for (int i = 0; i < MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT; i ++) {
+    for (int i = 0; i < imx291_MAX_WIDTH * imx291_MAX_HEIGHT; i ++) {
         isolatedEventsBuffer[i] = 0;
     }
 
-    for (int i = 1; i < MT9M001_MAX_HEIGHT - 1; i ++) {
-        for (int j = 1; j < MT9M001_MAX_WIDTH - 1; j ++) {
-            center = src[i * MT9M001_MAX_WIDTH + j];
+    for (int i = 1; i < imx291_MAX_HEIGHT - 1; i ++) {
+        for (int j = 1; j < imx291_MAX_WIDTH - 1; j ++) {
+            center = src[i * imx291_MAX_WIDTH + j];
             // gain correction for 'even' pixels
             // TODO: needed or not? 
             if (((i + j) % 2 == 0) && (threshold > diag_correction)) {
@@ -400,25 +400,25 @@ void makeHistogramsAndSum(int bgSubtract, int indx) {
 //                threshold = threshold - diag_correction;
             }
             // TODO: two different modes would be helpful
-//            //frameSum[i * MT9M001_MAX_WIDTH + j] += 1;
+//            //frameSum[i * imx291_MAX_WIDTH + j] += 1;
             if ((center >= threshold) && (center >= lowerBound) && (center <= upperBound)) {
-                frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+                frameSum[i * imx291_MAX_WIDTH + j] += (uint32_t) center;
             }
             // all above-threshold pixels go into sum frame
 //            if (center >= threshold) {
-//                frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+//                frameSum[i * imx291_MAX_WIDTH + j] += (uint32_t) center;
 //            }
             pixelsHisto[center] += 1;
             // if all neighbors are below threshold
             if ((center >= threshold) && (center <= ceiling)) {
-                //frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
-                top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
-                bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
-                right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
-                left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
+                //frameSum[i * imx291_MAX_WIDTH + j] += (uint32_t) center;
+                top = src[(i + 1) * imx291_MAX_WIDTH + j];
+                bottom = src[(i - 1) * imx291_MAX_WIDTH + j];
+                right = src[i * imx291_MAX_WIDTH + (j + 1)];
+                left = src[i * imx291_MAX_WIDTH + (j - 1)];
                 if ((top < corrected_threshold) && (bottom < corrected_threshold) && (right < corrected_threshold) && (left < corrected_threshold)) {
                     isolatedHisto[center] += 1;
-                    isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
+                    isolatedEventsBuffer[i * imx291_MAX_WIDTH + j] = center;
                 }
             }
         }
@@ -435,9 +435,9 @@ void makeHistogramsAndSum(int bgSubtract, int indx) {
 //// to energy dispersion
 //void update2DHisto(uint8_t *frame, uint32_t *histo) {
 //    uint8_t value;
-//    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-//        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-//            value = frame[i * MT9M001_MAX_WIDTH + j];
+//    for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+//        for (int j = 0; j < imx291_MAX_WIDTH; j ++) {
+//            value = frame[i * imx291_MAX_WIDTH + j];
 //            if (value > 0) {
 //                histo[i * MAXVALUE + value] += 1;
 //            }
@@ -452,9 +452,9 @@ void makeHistogramsAndSum(int bgSubtract, int indx) {
 // to energy dispersion
 void update2DHisto(uint8_t *frame, uint32_t *histo) {
     uint8_t value;
-    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-            value = frame[i * MT9M001_MAX_WIDTH + j];
+    for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < imx291_MAX_WIDTH; j ++) {
+            value = frame[i * imx291_MAX_WIDTH + j];
             if (value > 0) {
                 histo[j * MAXVALUE + value] += 1;
             }
@@ -507,17 +507,17 @@ static void diagAverages(uint8_t *arrA) {
     // the two groups are defined by whether the sum of the indices is even or odd
     int evenSum = 0;
     int oddSum = 0;
-    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
+    for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < imx291_MAX_WIDTH; j ++) {
             if ((i + j)%2 == 0) {
-                evenSum += arrA[i * MT9M001_MAX_WIDTH + j];
+                evenSum += arrA[i * imx291_MAX_WIDTH + j];
             } else {
-                oddSum += arrA[i * MT9M001_MAX_WIDTH + j];
+                oddSum += arrA[i * imx291_MAX_WIDTH + j];
             }
         }
     }
-    checkerboardEvenAverage = (uint8_t) (evenSum/(MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 2));
-    checkerboardOddAverage = (uint8_t) (oddSum/(MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 2));
+    checkerboardEvenAverage = (uint8_t) (evenSum/(imx291_MAX_WIDTH * imx291_MAX_HEIGHT / 2));
+    checkerboardOddAverage = (uint8_t) (oddSum/(imx291_MAX_WIDTH * imx291_MAX_HEIGHT / 2));
 }
 
 // subtract out "checkerboard" variation in a frame
@@ -535,20 +535,20 @@ static void subtractDiagBias(uint8_t *arrA, int bgSubtract) {
 //        excessEven += darkLevel;
 //        excessOdd += darkLevel;
     }
-    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-            curPix = arrA[i * MT9M001_MAX_WIDTH + j];
+    for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+        for (int j = 0; j < imx291_MAX_WIDTH; j ++) {
+            curPix = arrA[i * imx291_MAX_WIDTH + j];
             if ((i + j)%2 == 0) {
                 if (excessEven < curPix) {
-                    arrA[i * MT9M001_MAX_WIDTH + j] -= excessEven;
+                    arrA[i * imx291_MAX_WIDTH + j] -= excessEven;
                 } else {
-                    arrA[i * MT9M001_MAX_WIDTH + j] = 0;
+                    arrA[i * imx291_MAX_WIDTH + j] = 0;
                 }
             } else {
                 if (excessOdd < curPix) {
-                    arrA[i * MT9M001_MAX_WIDTH + j] -= excessOdd;
+                    arrA[i * imx291_MAX_WIDTH + j] -= excessOdd;
                 } else {
-                    arrA[i * MT9M001_MAX_WIDTH + j] = 0;
+                    arrA[i * imx291_MAX_WIDTH + j] = 0;
                 }
             }
         }
@@ -580,12 +580,12 @@ static uint8_t arrayMean(uint8_t *arr, int size) {
 // args: src, a pointer to data of a single frame
 static void conditionFrame(uint8_t *src, int bgSubtract) {
 //    // subtract row-to-row variation
-//    subtractRows(src, MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    subtractRows(src, imx291_MAX_HEIGHT, imx291_MAX_WIDTH);
 //    // transpose and move to tFrame
-//    transpose(src,  tFrame,  MT9M001_MAX_HEIGHT, MT9M001_MAX_WIDTH);
+//    transpose(src,  tFrame,  imx291_MAX_HEIGHT, imx291_MAX_WIDTH);
 //    // do the same on the transposed frame
-//    subtractRows(tFrame, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
-//    transpose(tFrame, src, MT9M001_MAX_WIDTH, MT9M001_MAX_HEIGHT);
+//    subtractRows(tFrame, imx291_MAX_WIDTH, imx291_MAX_HEIGHT);
+//    transpose(tFrame, src, imx291_MAX_WIDTH, imx291_MAX_HEIGHT);
 
 //    // subtract "checkerboard" variation"
 //    // check that the checkerboard parameters have been initialized
@@ -598,7 +598,7 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
     // TODO: it would be less computationally intensive to mask out hot pixels instead
     // of doing a background subtraction
 //    if (dark != NULL) {
-//        subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
+//        subArrays(src, dark + 1, imx291_MAX_HEIGHT * imx291_MAX_WIDTH - 1);
 //    }
     zeroColumns(src, masked_cols.rowNums, masked_cols.size);
 }
@@ -607,8 +607,8 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
 void zeroColumns(uint8_t *arr, int *indices, int size) {
     for (int k = 0; k < size; k ++) {
         int j = indices[k];
-        for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-            arr[i * MT9M001_MAX_WIDTH + j] = 0;
+        for (int i = 0; i < imx291_MAX_HEIGHT; i ++) {
+            arr[i * imx291_MAX_WIDTH + j] = 0;
         }
     }
 }

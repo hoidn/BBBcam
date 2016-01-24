@@ -131,8 +131,8 @@ int main(void) {
 //  write16(0x09, 0x0010); 
 //  read16(0x09);  
 //  read16(0x0);  
-//  read16(MT9M001_READ_OPTIONS1);  
-//  read16(MT9M001_SHUTTER_WIDTH);  
+//  read16(imx291_READ_OPTIONS1);  
+//  read16(imx291_SHUTTER_WIDTH);  
 
     reset();
     writeArr(params_1280x1024_trigger);
