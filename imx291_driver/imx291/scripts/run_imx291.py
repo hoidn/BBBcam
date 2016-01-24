@@ -13,7 +13,7 @@ parser.add_argument('--r', '-r', nargs = 2,  help = "range of values considered 
 
 args = parser.parse_args()
 
-lock_file = '/var/lock/mt9m001_cam'
+lock_file = '/var/lock/imx291_cam'
 
 def check_sensor_running():
     return os.path.isfile(lock_file)

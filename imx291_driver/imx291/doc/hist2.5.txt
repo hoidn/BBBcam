@@ -279,7 +279,7 @@
   287  git log --oneline --graph --decorate --all
   288  git log
   289  sudo ./PRU_memAcc_DDR_sharedRAM 5 -o dark11.19 
-  290  cd am335x_pru_package-master/pru_sw/example_apps/mt9m001_driver/
+  290  cd am335x_pru_package-master/pru_sw/example_apps/imx291_driver/
   291  ls
   292  ipython
   293  sudo apt-get install python-ipython
@@ -327,7 +327,7 @@
   335  top
   336  cd -
   337  sudo halt
-  338  cd am335x_pru_package-master/pru_sw/example_apps/mt9m001_driver/
+  338  cd am335x_pru_package-master/pru_sw/example_apps/imx291_driver/
   339  sudo ./pinmux_config.sh 
   340  ls
   341  sudo ./PRU_memAcc_DDR_sharedRAM
@@ -341,7 +341,7 @@
   349  time sudo ./PRU_memAcc_DDR_sharedRAM 5 -o FeS_direct_fluorescence -d darktest11.19average.dat
   350  ./PRU_memAcc_DDR_sharedRAM 
   351  time sudo ./PRU_memAcc_DDR_sharedRAM 5 -o FeS_direct_fluorescence -d darktest11.19average.dat -n 1000
-  352  cd am335x_pru_package-master/pru_sw/example_apps/mt9m001_driver/
+  352  cd am335x_pru_package-master/pru_sw/example_apps/imx291_driver/
   353  vim PRU_memAcc_DDR_sharedRAM.c
   354  cd runlength/
   355  ls
@@ -352,7 +352,7 @@
   360  vim PRU_memAcc_DDR_sharedRAM. 
   361  vim PRU_memAcc_DDR_sharedRAM.c
   362  sudo halt
-  363  cd am335x_pru_package-master/pru_sw/example_apps/mt9m001_driver/
+  363  cd am335x_pru_package-master/pru_sw/example_apps/imx291_driver/
   364  stat dark11.19.2014_3average.dat
   365  date
   366  cd runlength/
@@ -490,7 +490,7 @@
   498  ls
   499  ipython
   500  ls
-  501  cd am335x_pru_package-master/pru_sw/example_apps/mt9m001_driver/
+  501  cd am335x_pru_package-master/pru_sw/example_apps/imx291_driver/
   502  ls
   503  sudo ./PRU_memAcc_DDR_sharedRAM
   504  sudo ./PRU_memAcc_DDR_sharedRAM -n 50 -o dark2.5 

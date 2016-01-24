@@ -78,7 +78,7 @@
 #include <time.h>
 
 // i2c interface
-#include "mt9m001.h"
+#include "imx291.h"
 
 #include "camctrl.h"
 
@@ -287,7 +287,7 @@ int main (int argc, char **argv)
     // is set, so are all the other register parameters.
     if (gain != 0) {
         if (configure && (gain != check_gain())) {
-            mt9m001_init_readout(gain);
+            imx291_init_readout(gain);
         }
         delay_ms(100);
     }

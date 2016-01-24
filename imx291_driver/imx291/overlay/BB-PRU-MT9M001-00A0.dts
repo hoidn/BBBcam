@@ -43,7 +43,7 @@
     fragment@0 {
     target = <&am33xx_pinmux>;
     __overlay__ {
-        bb_pru_mt9m001: pinmux_bb_pru_mt9m001 {
+        bb_pru_imx291: pinmux_bb_pru_imx291 {
             pinctrl-single,pins = <0x0e0 0x26 0x0b8 0x26 0x0bc 0x26 0x0b0 0x26 0x0b4 0x26 0x0a8 0x26 0x0ac 0x26 0x0a0 0x26 0x0a4 0x26 0x034 0x26 0x030 0x26 0x0e8 0x5 0x0ec 0x5>;
         };
     };
@@ -54,11 +54,11 @@
     fragment@1 {
         target = <&ocp>;
         __overlay__ {
-            bb_pru_mt9m001_pinmux {
+            bb_pru_imx291_pinmux {
                 compatible = "bone-pinmux-helper";
                 status = "okay";
                 pinctrl-names = "default";
-                pinctrl-0 = <&bb_pru_mt9m001>;
+                pinctrl-0 = <&bb_pru_imx291>;
             };
         };
     };

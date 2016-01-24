@@ -317,7 +317,7 @@ DONE:
     MOV r1, DELAY_1
 
     // TODO: in general we should do a power-down sequence here. It turns out
-    // not to matter for the mt9m001.
+    // not to matter for the imx291.
 
     // Halt the processor
     HALT

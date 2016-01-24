@@ -1,11 +1,11 @@
-#include "mt9m001.h"
+#include "imx291.h"
 #include "i2c.h"
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 
-// Register values for continuous capture mode used by mt9m001_init_readout
+// Register values for continuous capture mode used by imx291_init_readout
 // to initialize the sensor.
 AddrVal params_1280x1024_continuous[] = {
     //MT9M001_READ_OPTIONS1, 0x8100,//enable snapshot mode 
@@ -16,15 +16,15 @@ AddrVal params_1280x1024_continuous[] = {
     0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
 };
 
-static void mt9m001_reset(void);
-static int mt9m001_i2c_writeArr(AddrVal *regStructArr);
+static void imx291_reset(void);
+static int imx291_i2c_writeArr(AddrVal *regStructArr);
 
 int check_camera_running() {
-    return ( access( "/var/lock/mt9m001_camera", F_OK ) != -1 );
+    return ( access( "/var/lock/imx291_camera", F_OK ) != -1 );
 }
 
 int set_camera_lock() {
-    if (system("touch /var/lock/mt9m001_camera") == -1) {
+    if (system("touch /var/lock/imx291_camera") == -1) {
         return -1; 
     } else {
         return 0;
@@ -36,17 +36,17 @@ int check_gain() {
 }
 
 // initialize i2c interface and configure sensor fr single capture mode
-void mt9m001_init_readout(uint16_t gain) {
+void imx291_init_readout(uint16_t gain) {
     params_1280x1024_continuous[1].val = gain;
     printf("    INFO: configuring i2c device registers\n");
     sensors_ADC_init(MT9M001_ADDR);
-    mt9m001_reset();
-    mt9m001_i2c_writeArr(params_1280x1024_continuous);
+    imx291_reset();
+    imx291_i2c_writeArr(params_1280x1024_continuous);
     //init_readout(addrval_ptr);
 }
 
 // reset the sensor
-static void mt9m001_reset(void) {
+static void imx291_reset(void) {
     write16(MT9M001_RESET, 0x0001);
     delay_ms(10);
     delay_ms(999);
@@ -55,7 +55,7 @@ static void mt9m001_reset(void) {
 }
 
 // Configure sensor registers
-static int mt9m001_i2c_writeArr(AddrVal *regStructArr) {
+static int imx291_i2c_writeArr(AddrVal *regStructArr) {
     int retval;
     write16(MT9M001_OUTPUT_CONTROL, 0x0003);//enable editing of reg values
     delay_ms(10);
