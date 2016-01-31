@@ -7,13 +7,18 @@
 
 // Register values for continuous capture mode used by imx291_init_readout
 // to initialize the sensor.
+//disable black level correction --> blk level offset 0
+//gain of 0xf --> max gain? 
+//KYLE:TODO FIX THE REST OF THE PARAMETERS 
 AddrVal params_1280x1024_continuous[] = {
     //imx291_READ_OPTIONS1, 0x8100,//enable snapshot mode 
     //imx291_SHUTTER_WIDTH, 0x0800, // shutter width
-    imx291_BLACK_LEVEL, 0x049a, //disable black level correction
-    imx291_GLOBAL_GAIN, 0x000f, //set gain to 0xf
+    imx291_BLKLEVEL1, 0x00, //disable black level correction
+    imx291_BLKLEVEL2, 0x00,
+    imx291_GAIN, 0xFF, //set gain to 0xf
+    imx291_WINDMODE,0x01, //720
     //imx291_OUTPUT_CONTROL, (1 << 6),//test data
-    0xaa, 0xbb, 0xcc, 0xdd // 0xaabbccdd is the end sequence
+    0xaa, 0xb, 0xcc, 0xd // 0xaabbccdd is the end sequence
 };
 
 static void imx291_reset(void);
@@ -32,7 +37,7 @@ int set_camera_lock() {
 }
 
 int check_gain() {
-    return read16(imx291_GLOBAL_GAIN, imx291_ADDR);
+    return read8(imx291_GAIN, imx291_ADDR);
 }
 
 // initialize i2c interface and configure sensor fr single capture mode
@@ -46,21 +51,18 @@ void imx291_init_readout(uint16_t gain) {
 }
 
 // reset the sensor
+//imx automtically  retursn the bit after reset
 static void imx291_reset(void) {
-    write16(imx291_RESET, 0x0001);
-    delay_ms(10);
+    write8(imx291_SW_RESET, 0x0001);
     delay_ms(999);
-    write16(imx291_RESET, 0x0000);
-    delay_ms(10);
 }
 
 // Configure sensor registers
 static int imx291_i2c_writeArr(AddrVal *regStructArr) {
     int retval;
-    write16(imx291_OUTPUT_CONTROL, 0x0003);//enable editing of reg values
-    delay_ms(10);
+    //KYLE TODO: get into slave mode to be written to 	
     retval = i2c_writeArr(regStructArr);
-    write16(imx291_OUTPUT_CONTROL, 0x0002);//finish editing regs
+    //KYLE TODO: go to master mode after finish writing 
     delay_ms(10);
     return retval;
 }

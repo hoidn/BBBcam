@@ -295,6 +295,8 @@ int main (int argc, char **argv)
     // trigger readout
     send_pru_ready_signal();
     // Read out the frames
+
+	//this control loop seems weird
     for (int i = 0; i < numFrames; i ++) {
         // capture a frame and place it in the frame buffer
         if (i == 0) {

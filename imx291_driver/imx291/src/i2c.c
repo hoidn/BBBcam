@@ -37,16 +37,17 @@ void sensors_ADC_init(uint16_t addr) {
         /* ERROR HANDLING; you can check errno to see what went wrong */
         exit(1);
     }
-
 }
 
 //write value to regAddr. Byte order reversal is taken care of. 
 //(assumes little-endian machine)
-void write16(uint8_t regAddr, uint16_t value) {
-  uint8_t* valPtr = (uint8_t*) &value; 
-  i2c_comm_buf[0] = regAddr; 
-  i2c_comm_buf[1] = *(valPtr + 1); 
-  i2c_comm_buf[2] = *valPtr; 
+//modified for new camera
+//mt9001 sent 8 address bit then 16 bit value
+//imx sends 16 address then 8 bit value
+void write8(uint16_t regAddr, uint8_t value) {
+  i2c_comm_buf[0] = regAddr >> 8; 
+  i2c_comm_buf[1] = regAddr & 0xff;
+  i2c_comm_buf[2] = value; 
      if (write(file,i2c_comm_buf,3) != 3) {
         //ERROR HANDLING: i2c transaction failed 
        printf("Failed to write to the i2c bus.\n");
@@ -76,12 +77,12 @@ void write16(uint8_t regAddr, uint16_t value) {
 // }
 //}
 
-
+//KYLE TODO:CHANGE READ16 if i need to
 // uses external i2cget command because above implementation
 // of i2cget seems to misbehave
 // regAddr: a hex string denoting a register address
 // preforms endianness conversion
-uint16_t read16(uint8_t regAddr, uint8_t dev_addr) {
+uint16_t read8(uint16_t regAddr, uint8_t dev_addr) {
     char cmd[100] = {0};
     //char regStr[10] = {0};
     char result[10] = {0};
@@ -149,16 +150,16 @@ int i2c_writeArr(AddrVal *regStructArr) {
     {
         // obtain address and value to program
         current = regStructArr[i];
-        if ((current.addr == 0xaa) && (current.val ==0xbb))
+        if ((current.addr == 0xaa) && (current.val ==0xb))
         {
-            if ((regStructArr[i + 1].addr==0xcc) && (regStructArr[i + 1].val==0xdd))
+            if ((regStructArr[i + 1].addr==0xcc) && (regStructArr[i + 1].val==0xd))
             {
                 // end sequence seen.
                 not_finished=0;
                 break;
             }
         }
-        write16(current.addr, current.val);
+        write8(current.addr, current.val);
         delay_ms(10);
         i += 1;
     }while (not_finished);
