@@ -285,8 +285,11 @@ int main (int argc, char **argv)
     // only initialize the gain value if necessary
     // TODO: There's a possibly problematic assumption here that, if the gain 
     // is set, so are all the other register parameters.
+    printf("gain: %d\n", gain);
+    printf("configure: %d\n", configure);
+    printf("check_gain(): %d\n", check_gain());
     if (gain != 0) {
-        if (configure && (gain != check_gain())) {
+        if (configure || (gain != check_gain())) {
             mt9m001_init_readout(gain);
         }
         delay_ms(100);
