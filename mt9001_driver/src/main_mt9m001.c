@@ -172,6 +172,9 @@ uint8_t ceiling = 255;
 uint8_t lowerBound = 0;
 uint8_t upperBound = 255;
 
+// If true, only isolated pixels contribute to the frame that's saved to *sum.dat
+uint32_t cluster_rejection = 0;
+
 char nameBuffer[BUFSIZE];
 
 /******************************************************************************
@@ -195,7 +198,7 @@ int main (int argc, char **argv)
     errno = 0;
 
     // handle command line arguments
-    if (argc < 2 || argc > 12) {
+    if (argc < 2 || argc > 13) {
         usage(argv[0]);
         return -1;
     }
@@ -238,7 +241,16 @@ int main (int argc, char **argv)
                     usage(argv[0]);
                     exit(1);
                 }
-            }else if (strcmp(argv[i], "-r") == 0) { // range of valid ADC values
+            // In this mode, only pixels with sub-threshold neighbors are
+            // added to the sum-over-frames image that's written to *sum.dat.
+            } else if (strcmp(argv[i], "-p") == 0) { // Sum only isolated pixels
+                cluster_rejection = 1;
+                printf("Setting cluster rejection mode\n");
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+            } else if (strcmp(argv[i], "-r") == 0) { // range of valid ADC values
                 i ++;
                 lowerBound = strtol(argv[i], &endPtr, 10);
                 if (errno != 0) {
@@ -361,7 +373,7 @@ static char *concatStr(char *str1, char *str2) {
 
 // usage statement
 static void usage(char *name) {
-    printf("usage: %s threshold -o filename [-n number_of_exposures] [-g gain] [-c] [-r lower_bound upper_bound]\n", name);
+    printf("usage: %s threshold -o filename [-n number_of_exposures] [-g gain] [-c] [-r lower_bound upper_bound] [-p]\n", name);
 }
 
 //write uint32_t array to file
@@ -404,22 +416,20 @@ void makeHistogramsAndSum(int bgSubtract, int indx) {
             }
             // TODO: two different modes would be helpful
 //            //frameSum[i * MT9M001_MAX_WIDTH + j] += 1;
-            if ((center >= threshold) && (center >= lowerBound) && (center <= upperBound)) {
+            if ((!cluster_rejection) && (center >= threshold) && (center >= lowerBound) && (center <= upperBound)) {
                 frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
             }
-            // all above-threshold pixels go into sum frame
-//            if (center >= threshold) {
-//                frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
-//            }
             pixelsHisto[center] += 1;
             // if all neighbors are below threshold
             if ((center >= threshold) && (center <= ceiling)) {
-                //frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
                 top = src[(i + 1) * MT9M001_MAX_WIDTH + j];
                 bottom = src[(i - 1) * MT9M001_MAX_WIDTH + j];
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
                 left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
                 if ((top < corrected_threshold) && (bottom < corrected_threshold) && (right < corrected_threshold) && (left < corrected_threshold)) {
+                    if (cluster_rejection) {
+                        frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
+                    }
                     isolatedHisto[center] += 1;
                     isolatedEventsBuffer[i * MT9M001_MAX_WIDTH + j] = center;
                 }
