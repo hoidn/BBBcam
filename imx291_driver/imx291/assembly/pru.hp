@@ -248,6 +248,14 @@ HOST_TRIGGER_END:
 	wbs CLK_SYNC 
 .endm
 
+//wait for clock is high, then waits for clock edge to fall
+//used for synching with external clock
+.macro waitForFall
+	wbs CLK_SYNC
+	wbc CLK_SYNC 
+.endm
+
+
 // ***************************************
 // *    Global Structure Definitions     *
 // ***************************************
