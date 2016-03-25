@@ -96,20 +96,29 @@
 
 // pin mappings
 // inputs
-#define FV r31.t8 // p8_27
-#define LV r31.t9 // p8_29
+#define FV r31.t12 // p8_21
+#define LV r31.t13 // p8_20
 #define PIX9 r31.t13 //P8_20
 #define PIX0 r31.t12 // p8_21
 #define PIX8_1 r31.b0 // p8_39 - p8_46
-#define FV_N 8
-#define LV_N 9
+#define FV_N 12
+#define LV_N 13
 #define PIX9_N 13
 #define PIX0_N 12
 
-// outputs
-#define EXPOSURE r30.t12 // p8_21. This output currently does not work
-#define OE r30.t15 // p8_11, must be controlled from pru0
-#define SYSCLK r30.t10 // p8_28
+#define CLK_SYNC r31.t16//p9_16
+//outputs 
+//pru1
+#define OMODE r30.t1 //p9_29
+#define PWREN r30.t7 //p9_25
+#define XCLR r30.t2 //p9_30
+#define XMSTER r30.t14 //p8_12
+
+#define OE r30.t15 // p8_11, must be controlled from pru0...was changed to pru1... problem?
+
+//pru0
+#define CLK_EN r30.t5 //p9_27
+#define XCE r30.t3 //p9_28
 
 // size in bytes of buffer to share with ARM, divided by 0x10000
 #define DDR_BUF_SIZE 0x40 // buf size: 0x400000
@@ -230,6 +239,13 @@ INIT_NUM_FRAMES:
 HOST_TRIGGERED:
         mov dst, 1
 HOST_TRIGGER_END:
+.endm
+
+//wait for clock is Low, then waits for clock edge to rise
+//used for synching with external clock
+.macro waitForRise
+	wbc CLK_SYNC
+	wbs CLK_SYNC 
 .endm
 
 // ***************************************
