@@ -178,7 +178,6 @@ char nameBuffer[BUFSIZE];
 * Global Function Definitions                                                 *
 ******************************************************************************/
 
-
 int main (int argc, char **argv)
 {
     // error handling for strol
@@ -276,13 +275,16 @@ int main (int argc, char **argv)
         // Wait for sensor to initialize before starting i2c communication
         delay_ms(999);
         if (!check_camera_running()) {
-            set_camera_lock();
+          set_camera_lock();
         }
     } else {
         config_pru(0, numFrames);
         pru_start();
     }
-    // only initialize the gain value if necessary
+   
+ //Power on Sequence camera and clock and peripheral 
+ 	imx291_turnOn(); 
+ // only initialize the gain value if necessary
     // TODO: There's a possibly problematic assumption here that, if the gain 
     // is set, so are all the other register parameters.
     if (gain != 0) {

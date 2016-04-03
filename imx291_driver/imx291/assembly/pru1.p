@@ -92,15 +92,15 @@ START:
 
 .macro  onepix_9_2
 .mparam dst
-    CLR  SYSCLK // falling clock edge
+    waitForFall// CLR  SYSCLK // falling clock edge
     MOV dst, PIX8_1 // move pix[8:0] into destination reg
     QBBS LEADING_1, r31, PIX9_N // branch depending on 
 LEADING_0: // most significant bit is 0
-    SET SYSCLK // rising edge
+    waitForRise//SET SYSCLK // rising edge
     LSR dst, dst, 1
     QBA END_ONEPIX_9_2
 LEADING_1: // most significant bit is 1
-    SET SYSCLK // rising edge
+    waitForRise//SET SYSCLK // rising edge
     LSR dst, dst, 1
     SET dst, dst, 7
 END_ONEPIX_9_2:
@@ -108,15 +108,17 @@ END_ONEPIX_9_2:
 
 .macro  onepix_8_1
 .mparam dst
-    CLR  SYSCLK // falling clock edge
+    waitForFall//CLR  SYSCLK // falling clock edge
+
     MOV dst, PIX8_1 // move pix[8:0] into destination reg
     QBBS SATURATED, r31, PIX9_N // saturated if most significant bit is 1
 UNSATURATED: // pix value is good
-    SET SYSCLK // rising edge
-    NOP
+    waitForRise //SET SYSCLK // rising edge
+   
+    //NOP
     QBA END_ONEPIX_8_1
 SATURATED: // pix value overflowed
-    SET SYSCLK
+    waitForRise//SET SYSCLK
     MOV dst, 255
     NOP
 END_ONEPIX_8_1:
@@ -124,11 +126,11 @@ END_ONEPIX_8_1:
 
 .macro  onepix_7_0
 .mparam dst
-    CLR  SYSCLK // falling clock edge
+    waitForFall//CLR  SYSCLK // falling clock edge
     MOV dst, PIX8_1 // move pix[8:0] into destination reg
-    QBBS TRAILING_1, r31, PIX0_N // branch depending on 
-TRAILING_0: // least significant bit is 0
-    SET SYSCLK // rising edge
+u1   u1QBuBS TRAILING_1, r31, PIX0_N // branch depending on 
+TRAILING_0: // least significant bitis 0
+    waitForRise//SET SYSCLK // rising edge
     LSL dst, dst, 1
     QBA END_ONEPIX_7_0
 TRAILING_1: // least significant bit is 1
@@ -151,25 +153,30 @@ INIT:
     MOV     transfer_ready, 1
 
     // initialize number_frames from the value written to DDR by host
+    // macro in pru.hp
     INIT_NUM_FRAMES
 
     MOV frame_counter, 0
 
+ //will keep branching in here until host gets triggered
     // Check initial_config parameter from host side
+
 HOST_TRIGGER:
-    CLR SYSCLK // clock edge
-    NOP
-    NOP
-    SET SYSCLK
+    waitForRise
+    //CLR SYSCLK // clock edge
+    //NOP
+    //NOP
+    //SET SYSCLK
     host_trigger r1
     QBEQ HOST_TRIGGER, r1, 0
 
 FLUSH:
     // wait until FV == 0 in case we need to flush out an old frame
-    CLR SYSCLK // clock edge
+    waitForRise
+    //CLR SYSCLK // clock edge
     MOV var1, r31.w0 // read inputs
-    NOP
-    SET SYSCLK // clock edge
+    //NOP
+    //SET SYSCLK // clock edge
     NOP
     QBBS    FLUSH, var1, FV_N // loop if FV == 0
 
@@ -178,20 +185,23 @@ READFRAME:
     // spin while providing clock if FV == 0
     NOP
 READFRAME1:
-    CLR SYSCLK // clock edge
+    //CLR SYSCLK // clock edge
+    waitForRise
     MOV var1, r31.w0 // read inputs
     NOP
-    SET SYSCLK // clock edge
+    //SET SYSCLK // clock edge
     QBBC    READFRAME, var1, FV_N // loop if FV == 0
 
 
 READLINE:
 
     // spin while providing clock if LV == 0
-    CLR SYSCLK // clock edge
+    
+    waitForRise
+    //CLR SYSCLK // clock edge
     MOV var1, r31.w0 // read inputs
     NOP
-    SET SYSCLK // clock edge
+    //SET SYSCLK // clock edge
     NOP
     QBBC    READLINE, var1, LV_N
 
@@ -271,7 +281,7 @@ SKIPSTONE_2:
     onepix_8_1  r24.b3
 
 
-// Can't jump by more than 255 words at once, hence this:
+// Cant jump by more than 255 words at once, hence this:
 QBA SKIPSTONE
 READFRAME_STEPPINGSTONE:
     QBA READFRAME_STEPPINGSTONE_2
@@ -295,18 +305,19 @@ ACKCHECK:
 
 WAIT_LV:
     // continue in the same line if LV == 1
-    CLR  SYSCLK // falling clock edge
+   waitForRise
+    //CLR  SYSCLK // falling clock edge
     NOP
     NOP
-    SET SYSCLK // rising edge
+    //SET SYSCLK // rising edge
     MOV var1, r31.w0 // read inputs
     QBBS    READLINE_STEPPINGSTONE, var1, LV_N
 
     // otherwise return to polling FV, unless this was the last line
-    CLR  SYSCLK // falling clock edge
+    waitForRise//CLR  SYSCLK // falling clock edge
     NOP
     NOP
-    SET SYSCLK // rising edge
+    //SET SYSCLK // rising edge
     // wait for signal propagation. THIS HAS BEEN SHOWN TO BE NECESSARY
     // WITH V2 and V3 OF THE INTERFACE BOARD
     NOP
@@ -331,10 +342,11 @@ REPEAT: // however many more frames are specified
 // Continue providing a clock (necessary for i2c comm outside of this program)
 CLKEND: // provide a clock indefinately
 
-    CLR  SYSCLK // falling clock edge
+    waitForRise
+    //CLR  SYSCLK // falling clock edge
     NOP
     NOP
-    SET SYSCLK // rising edge
+    //SET SYSCLK // rising edge
     NOP
     QBA CLKEND
 

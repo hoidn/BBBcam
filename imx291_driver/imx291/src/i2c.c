@@ -82,7 +82,7 @@ void write8(uint16_t regAddr, uint8_t value) {
 // of i2cget seems to misbehave
 // regAddr: a hex string denoting a register address
 // preforms endianness conversion
-uint16_t read8(uint16_t regAddr, uint8_t dev_addr) {
+uint8_t read8(uint16_t regAddr, uint8_t dev_addr) {
     char cmd[100] = {0};
     //char regStr[10] = {0};
     char result[10] = {0};
@@ -99,9 +99,9 @@ uint16_t read8(uint16_t regAddr, uint8_t dev_addr) {
         exit(1);
     }
     fgets(result, sizeof(result) - 1, fp);
-    result_int =  strtol(result, &endPtr, 16);
+    result_int =  strtol(result, &endPtr, 8);
     // swap bytes
-    result_int = (result_int >> 8) + (result_int & 0xff);
+    //result_int = (result_int >> 8) + (result_int & 0xff);
     return result_int;
 }
 

@@ -69,5 +69,5 @@ int check_camera_running();
 int set_camera_lock();
 int check_gain();
 void imx291_init_readout(uint16_t gain);
-
+void imx291_turnOn();
 #endif

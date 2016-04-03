@@ -48,7 +48,8 @@
 // file:   pru0.p
 //
 // brief:  PRU Example to access DDR and PRU shared Memory.
-//
+// Pru0 will set settings of some gpio and memory and then wait for PRU1 to read in data
+// Once the data is set, pru0 will read data to memory 
 //
 //  (C) Copyright 2012, Texas Instruments, Inc
 //
@@ -222,8 +223,7 @@ INIT:
     MOV var1, 0
     SBBO    var1, r1, 0, 4
 
-    CLR OE // pull buffer OE low to enable output
-
+//doesnt break out of loop until trigger for PRU_READY  happens
 HOST_TRIGGER:
     host_trigger r1
     QBEQ HOST_TRIGGER, r1, 0
@@ -245,7 +245,7 @@ WAIT_ARM_ACK_1:
     MOV var1, 0
     SBBO    var1, r1, 0, 4
 
-    // clear the interrupt from pru1
+    // writeing to register  clears the interrupt from pru1
     LDI     var1, 18
     SBCO    var1, C0, 0x24, 4
 
@@ -258,7 +258,7 @@ RESETDDR_1:
 READ:
 
     // TODO: change label of this register
-    LBCO transfer_ready, CONST_PRUSHAREDRAM, 4, 4 // == 1 if there's a fresh chunk to transfer
+    LBCO transfer_ready, CONST_PRUSHAREDRAM, 4, 4 // == 1 if theres a fresh chunk to transfer
 
     QBNE    WAIT, transfer_ready, 1
 
@@ -271,7 +271,7 @@ READ:
     XIN 10, data_start, CHUNKSIZE
 
     //do correction for checkerboard pattern
-    diag_correction
+    //diag_correction
 
     // copy data to DDR
     SBBO    data_start, ddr_pointer, DDR_OFFSET, CHUNKSIZE
