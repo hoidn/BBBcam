@@ -94,7 +94,12 @@
 #define ADDEND2		 0x12345678u
 #define ADDEND3		 0x10210210u
 
-#define DIAG_CORRECTION (256 - 8)
+// for gain 0x3f and bits 8 to 1. Optimal threshold level: 35
+#define DIAG_CORRECTION (22) 
+// Add this value to each pixel in the frame
+#define OFFSET 6
+
+//#define DIAG_CORRECTION (20) 
 // 1024 or 1280 depending on orientation
 #define HISTOGRAM_LENGTH MT9M001_MAX_WIDTH 
 // buffer size for file name strings
@@ -131,6 +136,7 @@ static void subtractRows(uint8_t *arrA, int n, int m);
 static void subtractDiagBias(uint8_t *arrA, int bgSubtract);
 static void diagAverages(uint8_t *arrA);
 static void subConstant(uint8_t *arr, uint8_t subConstant, int size);
+static void arrAdd(uint8_t *arr, uint8_t constant, int size);
 static uint8_t arrayMean(uint8_t *arr, int size);
 static void conditionFrame(uint8_t *src, int bgSubtract);
 
@@ -427,7 +433,7 @@ void makeHistogramsAndSum(int bgSubtract, int indx) {
                 right = src[i * MT9M001_MAX_WIDTH + (j + 1)];
                 left = src[i * MT9M001_MAX_WIDTH + (j - 1)];
                 if ((top < corrected_threshold) && (bottom < corrected_threshold) && (right < corrected_threshold) && (left < corrected_threshold)) {
-                    if (cluster_rejection) {
+                    if (cluster_rejection &&  (center >= lowerBound) && (center <= upperBound)) {
                         frameSum[i * MT9M001_MAX_WIDTH + j] += (uint32_t) center;
                     }
                     isolatedHisto[center] += 1;
@@ -468,7 +474,7 @@ void update2DHisto(uint8_t *frame, uint32_t *histo) {
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
         for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
             value = frame[i * MT9M001_MAX_WIDTH + j];
-            if (value > 0) {
+            if ((value > lowerBound) && (value < upperBound)) {
                 histo[j * MAXVALUE + value] += 1;
             }
         }
@@ -579,6 +585,12 @@ static void subConstant(uint8_t *arr, uint8_t tosub, int size) {
     }
 }
 
+static void arrAdd(uint8_t *arr, uint8_t constant, int size) {
+    for (int i = 0; i < size; i ++) {
+        arr[i] += constant;
+    }
+}
+
 // return the mean value of array arr of size size
 static uint8_t arrayMean(uint8_t *arr, int size) {
     int sum = 0; 
@@ -614,6 +626,7 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
 //        subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
 //    }
     zeroColumns(src, masked_cols.rowNums, masked_cols.size);
+    arrAdd(src, OFFSET, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
 }
 
 // set values in the given columns to 0

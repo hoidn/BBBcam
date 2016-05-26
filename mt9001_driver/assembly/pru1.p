@@ -310,6 +310,8 @@ WAIT_LV:
     // wait for signal propagation. THIS HAS BEEN SHOWN TO BE NECESSARY
     // WITH V2 and V3 OF THE INTERFACE BOARD
     NOP
+    NOP
+    NOP
     // read out another line if FV is still 1. Check the value
     QBBS    WAIT_LV, r31, FV_N
 
