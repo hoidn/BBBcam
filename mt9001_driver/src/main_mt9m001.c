@@ -124,11 +124,14 @@ struct masked masked_cols = {0, {}};
 * Local Function Declarations                                                 *
 ******************************************************************************/
 
+static void applyWindowing(uint32_t *arr, int arrSize);
+static void ptrExposureWrite32(FILE *fp, uint32_t *arr, int arrSize);
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize);
+static void updateFramesumFile(char *fname);
 static char *concatStr(char *str1, char *str2);
 static void usage(char *name);
 void zeroColumns(uint8_t *arr, int *indices, int size);
-static void subArrays(uint8_t *arr1, uint8_t *arr2, int size);
+static void addArrays_uint32(uint32_t *arr1, uint32_t *arr2, int size);
 void makeHistogramsAndSum(int bgSubtract, int indx);
 void update2DHisto(uint8_t *frame, uint32_t *histo);
 static void transpose(uint8_t *arrA, uint8_t *arrB, int n, int m);
@@ -160,18 +163,26 @@ extern char i2c_comm_buf[10];
 static uint8_t checkerboardEvenAverage = 0;
 static uint8_t checkerboardOddAverage = 0;
 
-//uint8_t *tFrame; // array to hold transposed frame
-// Frame buffer and various other buffers used for analysis during readout
-uint8_t *frame; // frame buffer
-//uint8_t *frameAvg; // average of all the frames
-uint8_t *isolatedEventsBuffer; // average of all the frames
-uint32_t *isolatedHisto; //histogram of value sof isolated pixels
-uint32_t *pixelsHisto; //histogram of values of all pixels
-uint32_t *frameSum; //histogram of values of all pixels
-uint32_t *isolated2DHistogram; //row-by-row histogram of values of isolated pixels
+char *fnameBase = NULL;
+static FILE *fptrFrameSum = NULL;
+
+// frame buffer
+uint8_t frame[FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH]; 
+// average of all the frames
+uint8_t isolatedEventsBuffer[MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH] = {0}; 
+//histogram of value sof isolated pixels
+uint32_t isolatedHisto[MAXVALUE] = {0}; 
+//histogram of values of all pixels
+uint32_t pixelsHisto[MAXVALUE] = {0};
+
+// Sum of frames
+uint32_t frameSum[MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT] = {0}; 
+// Sum of sum sums of frames
+uint32_t frameSumSum[MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT] = {0}; 
+//row-by-row histogram of values of isolated pixels
+uint32_t isolated2DHistogram[MAXVALUE * HISTOGRAM_LENGTH] = {0};
 
 // threshold and ceiling ADC values for cluster analysis
-// TODO: get rid of these
 uint8_t threshold; 
 uint8_t ceiling = 255;
 // range of ADC values to keep in the summed frame
@@ -193,18 +204,17 @@ int main (int argc, char **argv)
     // error handling for strol
     char *endPtr; 
 
-    // optional output file prefix
-    char *fname = NULL;
 
     uint32_t numFrames = 40;
     uint32_t gain = 0;
+    uint32_t save_every = 1000000;
     uint32_t configure = 0;
     char gainStr[10];
     // static clock_t start, end;
     errno = 0;
 
     // handle command line arguments
-    if (argc < 2 || argc > 13) {
+    if (argc < 2 || argc > 15) {
         usage(argv[0]);
         return -1;
     }
@@ -219,13 +229,9 @@ int main (int argc, char **argv)
 
     if (argc > 2) {
         for (int i = 2; i < argc; i ++) {
-//            if (i + 2 > argc) {
-//                usage(argv[0]);
-//                exit(1);
-//            }
             if (strcmp(argv[i], "-o") == 0) {
                 i ++;
-                fname = argv[i];
+                fnameBase = argv[i];
             } else if (strcmp(argv[i], "-n") == 0) {
                 i ++; 
                 numFrames = strtol(argv[i], &endPtr, 10);
@@ -241,7 +247,15 @@ int main (int argc, char **argv)
                     usage(argv[0]);
                     exit(1);
                 }
-            }  else if (strcmp(argv[i], "-c") == 0) { // configure sensor
+            // -w [N]: every N frames, write frameSumSum to file and reset frameSum to 0.
+            } else if (strcmp(argv[i], "-w") == 0) { 
+                i ++; 
+                save_every = strtol(argv[i], &endPtr, 10);
+                if (errno != 0) {
+                    usage(argv[0]);
+                    exit(1);
+                }
+            } else if (strcmp(argv[i], "-c") == 0) { // configure sensor
                 configure = 1;
                 if (errno != 0) {
                     usage(argv[0]);
@@ -277,16 +291,6 @@ int main (int argc, char **argv)
             }
         }
     }
-    // allocate memory
-    frame = malloc(sizeof(uint8_t) * FRAMES_PER_TRANSFER * MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH);
-    // TODO: this will break if FRAMES_PER_TRANSFER != 1
-    isolatedEventsBuffer = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint8_t));
-    isolatedHisto = calloc(MAXVALUE, sizeof(uint32_t));
-    pixelsHisto = calloc(MAXVALUE, sizeof(uint32_t));
-    frameSum = calloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH, sizeof(uint32_t));
-    isolated2DHistogram = calloc(MAXVALUE * HISTOGRAM_LENGTH, sizeof(uint32_t));
-    // frame to hold transposed arrays
-    //tFrame = malloc(MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH * sizeof(uint32_t));
 
     if ((configure == 1) || (!check_camera_running())) {
         config_pru(1, numFrames);
@@ -313,7 +317,12 @@ int main (int argc, char **argv)
         delay_ms(100);
     }
 
+    // name for sum-of-exposures file while readout is ongoing
+    char *partial_fname = concatStr(fnameBase, "sum.dat.part");
+    // Final name
+    char *final_fname = concatStr(fnameBase, "sum.dat");
     // trigger readout
+
     send_pru_ready_signal();
     // Read out the frames
     for (int i = 0; i < numFrames; i ++) {
@@ -333,6 +342,9 @@ int main (int argc, char **argv)
                 makeHistogramsAndSum(1, j);
             }
         } 
+        if (i % save_every == 0 && i > 0) {
+            updateFramesumFile(partial_fname);
+        }
     }
 
     // print the total integration time
@@ -340,23 +352,19 @@ int main (int argc, char **argv)
 
     wait_pru1_complete();
 
+    updateFramesumFile(partial_fname);
 
-
-//    // calculate average
-//    for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
-//        for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
-//            frameAvg[i * MT9M001_MAX_WIDTH + j] = (uint8_t) (frameSum[i * MT9M001_MAX_WIDTH + j]/((numFrames - 1) * FRAMES_PER_TRANSFER));
-//        }
-//    }
-
+    // rename the sum-of-exposures file if it exists
+    if (rename(partial_fname, final_fname)) {
+        printf("Output file rename failed.");
+        exit(1);
+    }
 
     // Write stuff to file
-    exposureWrite32(concatStr(fname, "test.dat"), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
-    exposureWrite32(concatStr(fname, "singles.dat"), (uint32_t *) isolatedHisto, MAXVALUE);
-    exposureWrite32(concatStr(fname, "pixels.dat"), (uint32_t *) pixelsHisto, MAXVALUE);
-    exposureWrite32(concatStr(fname, "sum.dat"),  frameSum, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
-    //exposureWrite32(concatStr(fname, "average.dat"), (uint32_t *) frameAvg, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT/4);
-    exposureWrite32(concatStr(fname, "2dhisto.dat"), (uint32_t *) isolated2DHistogram, MAXVALUE * HISTOGRAM_LENGTH);
+    exposureWrite32(concatStr(fnameBase, "test.dat"), (uint32_t *) frame, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT / 4);
+    exposureWrite32(concatStr(fnameBase, "singles.dat"), (uint32_t *) isolatedHisto, MAXVALUE);
+    exposureWrite32(concatStr(fnameBase, "pixels.dat"), (uint32_t *) pixelsHisto, MAXVALUE);
+    exposureWrite32(concatStr(fnameBase, "2dhisto.dat"), (uint32_t *) isolated2DHistogram, MAXVALUE * HISTOGRAM_LENGTH);
 
     pru_exit();
     return 0;
@@ -379,17 +387,49 @@ static char *concatStr(char *str1, char *str2) {
 
 // usage statement
 static void usage(char *name) {
-    printf("usage: %s threshold -o filename [-n number_of_exposures] [-g gain] [-c] [-r lower_bound upper_bound] [-p]\n", name);
+    printf("usage: %s threshold -o filename [-n [number of exposures]] [-w update interval] [-g gain] [-c] [-r [lower_bound] [upper_bound]] [-p]\n", name);
 }
 
+
+static void ptrExposureWrite32(FILE *fp, uint32_t *arr, int arrSize) {
+    fwrite(arr, sizeof(uint32_t), arrSize, fp);
+     // fclose(fp);
+}
+    
 //write uint32_t array to file
 static void exposureWrite32(char *fname, uint32_t *arr, int arrSize) {
-     FILE *fp;
-     fp = fopen(fname, "wb");
-     fwrite(arr, sizeof(uint32_t), arrSize, fp);
-     //fclose(fp);
-     printf(fname);
-     printf("\n");
+    FILE *fp;
+    fp = fopen(fname, "wb");
+    ptrExposureWrite32(fp, arr, arrSize);
+    printf(fname);
+    printf("\n");
+}
+
+// Add frameSum to frameSumSum, write frameSumSum to file, and reset frameSum to 0
+static void updateFramesumFile(char *fname) {
+    if (fptrFrameSum == NULL) {
+        fptrFrameSum = fopen(fname, "wb");
+    }
+    if (cluster_rejection) {
+        applyWindowing(frameSum, sizeof(frameSum) / sizeof(frameSum[0]));
+    }
+    addArrays_uint32(frameSumSum, frameSum, sizeof(frameSumSum) / sizeof(frameSumSum[0]));
+    ptrExposureWrite32(fptrFrameSum, frameSumSum, sizeof(frameSumSum) / sizeof(frameSumSum[0]));
+
+    printf(fname);
+    printf("\n");
+
+    rewind(fptrFrameSum);
+    memset(frameSum, 0, sizeof(frameSum));
+}
+
+// Set values of an array falling outside the range (lowerBound, upperBound) to 0.
+static void applyWindowing(uint32_t *arr, int arrSize) {
+    for (int i = 0; i < arrSize; i ++) {
+        if ((arr[i] < lowerBound) || (arr[i] > upperBound)) {
+            arr[i] = 0;
+        }
+    }
 }
 
 // functions for creating a histogram of all pixels and of isolated above-thresold pixels, also 
@@ -551,8 +591,6 @@ static void subtractDiagBias(uint8_t *arrA, int bgSubtract) {
     excessEven = spread / 2;
     excessOdd = excessEven - spread;
     if (bgSubtract) {
-//        excessEven += darkLevel;
-//        excessOdd += darkLevel;
     }
     for (int i = 0; i < MT9M001_MAX_HEIGHT; i ++) {
         for (int j = 0; j < MT9M001_MAX_WIDTH; j ++) {
@@ -623,7 +661,7 @@ static void conditionFrame(uint8_t *src, int bgSubtract) {
     // TODO: it would be less computationally intensive to mask out hot pixels instead
     // of doing a background subtraction
 //    if (dark != NULL) {
-//        subArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
+//        addArrays(src, dark + 1, MT9M001_MAX_HEIGHT * MT9M001_MAX_WIDTH - 1);
 //    }
     zeroColumns(src, masked_cols.rowNums, masked_cols.size);
     arrAdd(src, OFFSET, MT9M001_MAX_WIDTH * MT9M001_MAX_HEIGHT);
@@ -639,19 +677,10 @@ void zeroColumns(uint8_t *arr, int *indices, int size) {
     }
 }
 
-//subtract arr2 from arr1
-void subArrays(uint8_t *arr1, uint8_t *arr2, int size) {
+// Add arr2 to arr1
+void addArrays_uint32(uint32_t *arr1, uint32_t *arr2, int size) {
     for (int i = 0; i < size; i ++) {
-
-        //to avoid underflows we set t corrected frame to 0 werever the
-        //value in the dark frame exceeds it
-        if (arr2[i] > arr1[i]) {
-            arr1[i] = 0;
-        } else {
-            arr1[i] -= arr2[i];
-        }
-
-//        arr1[i] -= arr2[i];
+    arr1[i] += arr2[i];
     }
 }
 
