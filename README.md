@@ -1,3 +1,5 @@
+## A BeagleBone Black-based camera platform for x-ray imaging and spectroscopy
+
 ### Setup procedure (starting from a fresh debian image on microSD card):
 
 #### OS/boot setup
