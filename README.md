@@ -38,5 +38,3 @@ sudo CROSS_COMPILE="" make install
 git clone https://github.com/cdsteinkuehler/beaglebone-universal-io.git && cd beaglebone-universal-io
 make all && sudo make install
 ```
-
-TODO: complete this
